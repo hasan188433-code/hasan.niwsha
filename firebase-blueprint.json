@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "QuizQuestion": {
+      "title": "Quiz Question",
+      "description": "A single question in the quiz",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctAnswerIdx": { "type": "number" }
+      },
+      "required": ["id", "text", "options", "correctAnswerIdx"]
+    },
+    "QuizRoom": {
+      "title": "Quiz Room",
+      "description": "A shared game session for two players",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string" },
+        "players": { "type": "array", "items": { "type": "string" } },
+        "currentTurn": { "type": "string" },
+        "round": { "type": "number" },
+        "totalSetsPlayed": { "type": "number" },
+        "questions": { "type": "array", "items": { "$ref": "#/entities/QuizQuestion" } },
+        "player1Answers": { "type": "array", "items": { "type": "number" } },
+        "player2Answers": { "type": "array", "items": { "type": "number" } },
+        "player1Guesses": { "type": "array", "items": { "type": "number" } },
+        "player2Guesses": { "type": "array", "items": { "type": "number" } },
+        "scores": { "type": "object" },
+        "setWins": { "type": "object" },
+        "winner": { "type": "string" },
+        "chatMessages": { "type": "array" },
+        "nextSetTopic": { "type": "string" },
+        "topicConfirmation": { "type": "string" },
+        "resetRequestedBy": { "type": "string" },
+        "lastUpdate": { "type": "number" }
+      },
+      "required": ["id", "status", "players"]
+    },
+    "PeriodSettings": {
+      "title": "Period Settings",
+      "description": "Period tracker start date, cycle length and period length",
+      "type": "object",
+      "properties": {
+        "lastPeriodDate": { "type": "string" },
+        "cycleLength": { "type": "number" },
+        "periodLength": { "type": "number" },
+        "lastUpdated": { "type": "number" }
+      },
+      "required": ["lastPeriodDate", "cycleLength", "periodLength"]
+    },
+    "SiteLogo": {
+      "title": "Site Logo",
+      "description": "Custom logo and visibility",
+      "type": "object",
+      "properties": {
+        "customLogoUrl": { "type": "string" },
+        "showLogoUpload": { "type": "boolean" },
+        "lastUpdated": { "type": "number" }
+      }
+    },
+    "FeaturedStory": {
+      "title": "Featured Story",
+      "description": "Featured story image and caption",
+      "type": "object",
+      "properties": {
+        "imageUrl": { "type": "string" },
+        "caption": { "type": "string" },
+        "lastUpdated": { "type": "number" }
+      }
+    },
+    "MemoryPhoto": {
+      "title": "Memory Photo",
+      "description": "A shared memory in the photo gallery",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "imageUrl"]
+    },
+    "DiaryEntry": {
+      "title": "Diary Entry",
+      "description": "A love letter or memory diary note",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "author": { "type": "string" },
+        "content": { "type": "string" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "author", "content", "date"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "QuizRoom",
+      "description": "Active quiz rooms"
+    },
+    "/site_data/{docId}": {
+      "schema": "PeriodSettings",
+      "description": "Site data including period_settings, site_logo, featured_story, memories, and diary"
+    }
+  }
+}

@@ -216,17 +216,15 @@ export const PeriodAIChat: React.FC<PeriodAIChatProps> = ({ cycleStatus, initial
       };
 
       setMessages((prev) => [...prev, botReply]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Chat error:', err);
-      // Friendly local fallback
+      // Informative and helpful response if the backend server/Gemini API is unreachable on static hosting (like Cloudflare Pages)
       const fallbackReply: ChatMessage = {
         id: `model-err-${Date.now()}`,
         role: 'model',
         text: activeRole === 'hasan' 
-          ? `حسن جان، برای تسکین درد نیوشا جان یک کیسه آب گرم و دمنوش بابونه یا نبات دارچین آماده کن و آروم شکمش رو ماساژ بده! 💖🫂`
-          : `نیوشای عزیزم، من همیشه اینجام تا آرومت کنم 🌸
-برای آرامش و تسکین فوری، حتماً یک کیسه آب گرم ملایم روی دل یا پایین کمرت بذار و یک دمنوش بابونه یا دارچین با نبات بنوش.
-یادت نره حسن دوست‌داشتنی‌ات عاشقانه هواتو داره و هر کاری بگی برات انجام میده! ❤️`,
+          ? `⚠️ **ارتباط با سرور هوش مصنوعی جمینای برقرار نشد:**\nدرخواست به سرور بک‌اند ارسال شد اما پاسخی دریافت نشد (در هاست‌های استاتیک مانند Cloudflare Pages نیاز به اجرای بک‌اند Node.js یا تنظیم متغیر GEMINI_API_KEY است).\n\n💡 **پاسخ آفلاین:** برای تسکین درد نیوشا جان یک کیسه آب گرم و دمنوش بابونه یا نبات دارچین آماده کن و آروم شکمش رو ماساژ بده! 💖🫂`
+          : `نیوشای عزیزم، ارتباط با سرور هوش مصنوعی برقرار نشد، اما برای آرامش و تسکین فوری، حتماً یک کیسه آب گرم ملایم روی دل یا پایین کمرت بذار و یک دمنوش بابونه یا دارچین با نبات بنوش. 🌸\nیادت نره حسن دوست‌داشتنی‌ات عاشقانه هواتو داره و هر کاری بگی برات انجام میده! ❤️`,
         timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
         mode: selectedMode,
         citations: [],

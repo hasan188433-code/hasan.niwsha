@@ -13,6 +13,7 @@ interface QuickNavDrawerProps {
   onOpenDailyMessage: () => void;
   onOpenQuiz: () => void;
   onOpenSky: () => void;
+  onOpenHeartbeat?: () => void;
 }
 
 export const QuickNavDrawer: React.FC<QuickNavDrawerProps> = ({
@@ -25,6 +26,7 @@ export const QuickNavDrawer: React.FC<QuickNavDrawerProps> = ({
   onOpenDailyMessage,
   onOpenQuiz,
   onOpenSky,
+  onOpenHeartbeat,
 }) => {
   const { theme } = useTheme();
 
@@ -160,8 +162,22 @@ export const QuickNavDrawer: React.FC<QuickNavDrawerProps> = ({
               {/* Quick Actions */}
               <div className="mt-5 pt-4 border-t border-white/10 space-y-2">
                 <span className="text-[11px] text-neutral-400 font-semibold px-2 block mb-1">
-                  امکانات اختصاصی حسن
+                  امکانات اختصاصی حسن و نیوشا
                 </span>
+
+                <button
+                  onClick={() => {
+                    onClose();
+                    onOpenHeartbeat?.();
+                  }}
+                  className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-gradient-to-r from-rose-900/80 via-pink-900/60 to-purple-900/70 hover:brightness-110 border border-rose-400/50 text-white text-xs font-bold transition-all text-right cursor-pointer shadow-lg animate-pulse"
+                >
+                  <span className="text-base">💓</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-white">تپش قلب زنده و چت دو‌نفره</span>
+                    <span className="text-[10px] text-rose-300 font-normal">ارسال ویبره همزمان + وویس و فایل 💬</span>
+                  </div>
+                </button>
 
                 <button
                   onClick={() => {

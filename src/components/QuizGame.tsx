@@ -5,6 +5,8 @@ import { db } from '../lib/firebase';
 import { doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { QuizRoom, QuizQuestion, QuizChatMessage } from '../types';
 import { sound } from '../utils/audio';
+import { useTheme } from '../context/ThemeContext';
+import { ThemeSelector } from './ThemeSelector';
 
 interface QuizGameProps {
   onClose: () => void;
@@ -57,7 +59,30 @@ const exitGameFullscreen = async () => {
   }
 };
 
+// Match win rule: The match finishes if:
+// 1. One of the 3 knockout outcomes occurs: 3-0, 4-1, 4-2
+// 2. OR either player reaches 5 wins (e.g. 5-3, 5-4)
+// Scores like 4-3, 3-1, 3-2, 3-3, 4-4 continue until someone reaches 5 wins or a knockout!
+export const checkMatchWinCondition = (hWins: number, nWins: number): { finished: boolean; winner?: string } => {
+  // Knockout conditions
+  if (hWins === 3 && nWins === 0) return { finished: true, winner: 'حسن' };
+  if (nWins === 3 && hWins === 0) return { finished: true, winner: 'نیوشا' };
+
+  if (hWins === 4 && nWins === 1) return { finished: true, winner: 'حسن' };
+  if (nWins === 4 && hWins === 1) return { finished: true, winner: 'نیوشا' };
+
+  if (hWins === 4 && nWins === 2) return { finished: true, winner: 'حسن' };
+  if (nWins === 4 && hWins === 2) return { finished: true, winner: 'نیوشا' };
+
+  // Reaching 5 wins (First to 5 sets)
+  if (hWins >= 5 && hWins > nWins) return { finished: true, winner: 'حسن' };
+  if (nWins >= 5 && nWins > hWins) return { finished: true, winner: 'نیوشا' };
+
+  return { finished: false };
+};
+
 export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
+  const { theme } = useTheme();
   const [user, setUser] = useState<'حسن' | 'نیوشا' | null>(null);
   const [room, setRoom] = useState<QuizRoom | null>(null);
   const [loading, setLoading] = useState(false);
@@ -465,20 +490,17 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               const nWins = newSetWins['نیوشا'] || 0;
               const currentTotalSets = (room.totalSetsPlayed || 0) + 1;
 
-              // Decisive win & Sudden Death rules
-              const hDecisive = (hWins === 3 && nWins === 0) || (hWins >= 4 && nWins <= 2) || (hWins >= 5);
-              const nDecisive = (nWins === 3 && hWins === 0) || (nWins >= 4 && hWins <= 2) || (nWins >= 5);
-              
-              const isAfterSet5 = currentTotalSets >= 5;
-              const hSuddenDeath = isAfterSet5 && (hWins > nWins);
-              const nSuddenDeath = isAfterSet5 && (nWins > hWins);
+              // --- قوانین مسابقه مشخص شده توسط کاربر ---
+              // مسابقه فقط و فقط با پیش آمدن یکی از این ۳ نتیجه تمام می‌شود:
+              // ۱. ۳ - ۰ (یا ۰ - ۳)
+              // ۲. ۴ - ۱ (یا ۱ - ۴)
+              // ۳. ۴ - ۲ (یا ۲ - ۴)
+              // نتایجی مانند ۴-۳، ۳-۱، ۳-۲، ۳-۳، ۴-۴، ۵-۳ و... به هیچ وجه مسابقه را تمام نمی‌کنند و بازی ادامه خواهد داشت.
+              const winCheck = checkMatchWinCondition(hWins, nWins);
 
-              const hWonMatch = hDecisive || hSuddenDeath;
-              const nWonMatch = nDecisive || nSuddenDeath;
-
-              if (hWonMatch || nWonMatch) {
+              if (winCheck.finished) {
                 update.status = 'finished';
-                update.winner = hWonMatch ? 'حسن' : 'نیوشا';
+                update.winner = winCheck.winner;
                 update.totalSetsPlayed = currentTotalSets;
                 update.setWins = newSetWins;
               } else {
@@ -486,7 +508,7 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                 const setEndGeminiMsg: QuizChatMessage = {
                   id: `msg-${Date.now()}-set-end`,
                   sender: 'جمینای',
-                  text: `خسته نباشید به هر دوتون! 🌸 ست شماره ${currentTotalSets} تموم شد.\nامتیاز این ست: حسن ${p1Score} | نیوشا ${p2Score}\nمجموع بردهای ست‌ها: حسن ${newSetWins['حسن']} - نیوشا ${newSetWins['نیوشا']}\nحالا برای ست شماره ${currentTotalSets + 1} چه موضوعی رو انتخاب می‌کنید؟ با من گپ بزنید تا تاییدش کنیم! ✨`,
+                  text: `خسته نباشید به هر دوتون! 🌸 ست شماره ${currentTotalSets} تموم شد.\nامتیاز این ست: حسن ${p1Score} | نیوشا ${p2Score}\nمجموع بردهای ست‌ها: حسن ${newSetWins['حسن']} - نیوشا ${newSetWins['نیوشا']}\n(مسابقه در حالت‌های ۳-۰، ۴-۱، ۴-۲ یا با رسیدن یکی از شما به ۵ برد به پایان می‌رسد و رقابت ادامه دارد! 🔥)\nحالا برای ست شماره ${currentTotalSets + 1} چه موضوعی رو انتخاب می‌کنید؟ با من گپ بزنید تا تاییدش کنیم! ✨`,
                   timestamp: Date.now(),
                 };
 
@@ -532,6 +554,30 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
       setError(null);
     } catch (err: any) {
       setError(`خطا در پاکسازی: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleContinueGame = async () => {
+    if (!room) return;
+    sound.playClick();
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'rooms', ROOM_ID), {
+        status: 'set_review',
+        player1Answers: [],
+        player2Answers: [],
+        player1Guesses: [],
+        player2Guesses: [],
+        readyForGuessing: [],
+        questions: [],
+        nextSetTopic: '',
+        topicConfirmation: '',
+        lastUpdate: Date.now()
+      });
+    } catch (err: any) {
+      setError(`خطا در ادامه بازی: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -733,6 +779,176 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
     }
   }, [room?.readyForGuessing, room?.status, room?.isGeneratingQuestions, user, loading]);
 
+  // Failsafe auto-recovery check: automatically advance from 'playing' to 'review' if both have finished answering
+  useEffect(() => {
+    if (!room || !user || loading) return;
+
+    const checkAutoAdvance = async () => {
+      if (room.status === 'playing') {
+        const p1Answers = room.player1Answers || [];
+        const p2Answers = room.player2Answers || [];
+        const questions = room.questions || [];
+        const p1Questions = questions.filter(q => q.subject === 'حسن');
+        const p2Questions = questions.filter(q => q.subject === 'نیوشا');
+
+        const p1Finished = p1Questions.length > 0 ? (p1Answers.length >= p1Questions.length) : (p1Answers.length >= 5);
+        const p2Finished = p2Questions.length > 0 ? (p2Answers.length >= p2Questions.length) : (p2Answers.length >= 5);
+        const hardCeilingFinished = p1Answers.length >= 5 && p2Answers.length >= 5;
+
+        if ((p1Finished && p2Finished) || hardCeilingFinished) {
+          console.log('Failsafe auto-recovery: Advancing status to review');
+          try {
+            await updateDoc(doc(db, 'rooms', ROOM_ID), {
+              status: 'review',
+              readyForGuessing: [],
+              lastUpdate: Date.now()
+            });
+          } catch (e) {
+            console.warn('Failsafe auto-advance error:', e);
+          }
+        }
+      }
+    };
+
+    checkAutoAdvance();
+  }, [room?.player1Answers, room?.player2Answers, room?.status, room?.questions, user, loading]);
+
+  // Failsafe auto-recovery for guessing phase: automatically advance to next set if both have finished guessing
+  useEffect(() => {
+    if (!room || !user || loading) return;
+
+    const checkAutoAdvanceGuessing = async () => {
+      if (room.status === 'guessing') {
+        const p1Guesses = room.player1Guesses || [];
+        const p2Guesses = room.player2Guesses || [];
+        const p1Answers = room.player1Answers || [];
+        const p2Answers = room.player2Answers || [];
+        const questions = room.questions || [];
+        const scores = room.scores || {};
+
+        const p1Questions = questions.filter(q => q.subject === 'حسن');
+        const p2Questions = questions.filter(q => q.subject === 'نیوشا');
+
+        const p1TargetLen = p2Questions.length > 0 ? p2Questions.length : 5;
+        const p2TargetLen = p1Questions.length > 0 ? p1Questions.length : 5;
+
+        const p1Finished = p1Guesses.length >= p1TargetLen;
+        const p2Finished = p2Guesses.length >= p2TargetLen;
+        const hardCeilingFinished = p1Guesses.length >= 5 && p2Guesses.length >= 5;
+
+        if ((p1Finished && p2Finished) || hardCeilingFinished) {
+          console.log('Failsafe auto-recovery (guessing): Processing set scores and advancing status');
+          
+          // Count scores from guesses vs answers
+          // P1 (Hasan) guesses Niusha's answers (p2Answers)
+          let p1Score = 0;
+          p1Guesses.forEach((guess, idx) => {
+            if (p2Answers[idx] !== undefined && guess === p2Answers[idx]) {
+              p1Score++;
+            }
+          });
+
+          // P2 (Niusha) guesses Hasan's answers (p1Answers)
+          let p2Score = 0;
+          p2Guesses.forEach((guess, idx) => {
+            if (p1Answers[idx] !== undefined && guess === p1Answers[idx]) {
+              p2Score++;
+            }
+          });
+
+          const setWinner = p1Score > p2Score ? 'حسن' : (p2Score > p1Score ? 'نیوشا' : 'برابری');
+          const newSetWins = { ...room.setWins };
+          if (setWinner === 'برابری') {
+            newSetWins['حسن'] = (newSetWins['حسن'] || 0) + 1;
+            newSetWins['نیوشا'] = (newSetWins['نیوشا'] || 0) + 1;
+          } else {
+            newSetWins[setWinner] = (newSetWins[setWinner] || 0) + 1;
+          }
+
+          const hWins = newSetWins['حسن'] || 0;
+          const nWins = newSetWins['نیوشا'] || 0;
+          const currentTotalSets = (room.totalSetsPlayed || 0) + 1;
+
+          const winCheck = checkMatchWinCondition(hWins, nWins);
+
+          const update: any = {};
+          if (winCheck.finished) {
+            update.status = 'finished';
+            update.winner = winCheck.winner;
+            update.totalSetsPlayed = currentTotalSets;
+            update.setWins = newSetWins;
+          } else {
+            const prevChat = room.chatMessages || [];
+            const setEndGeminiMsg: QuizChatMessage = {
+              id: `msg-${Date.now()}-set-end-failsafe`,
+              sender: 'جمینای',
+              text: `خسته نباشید به هر دوتون! 🌸 ست شماره ${currentTotalSets} تموم شد.\nامتیاز این ست: حسن ${p1Score} | نیوشا ${p2Score}\nمجموع بردهای ست‌ها: حسن ${newSetWins['حسن']} - نیوشا ${newSetWins['نیوشا']}\n(مسابقه در حالت‌های ۳-۰، ۴-۱، ۴-۲ یا با رسیدن یکی از شما به ۵ برد به پایان می‌رسد و رقابت ادامه دارد! 🔥)\nحالا برای ست شماره ${currentTotalSets + 1} چه موضوعی رو انتخاب می‌کنید؟ با من گپ بزنید تا تاییدش کنیم! ✨`,
+              timestamp: Date.now(),
+            };
+
+            update.lastSetScores = { 'حسن': p1Score, 'نیوشا': p2Score };
+            update.status = 'set_review';
+            update.readyForGuessing = [];
+            update.totalSetsPlayed = currentTotalSets;
+            update.setWins = newSetWins;
+            update.nextSetTopic = '';
+            update.topicConfirmation = '';
+            update.chatMessages = [...prevChat, setEndGeminiMsg];
+            update.player1Answers = [];
+            update.player2Answers = [];
+            update.player1Guesses = [];
+            update.player2Guesses = [];
+            update['scores.حسن'] = 0;
+            update['scores.نیوشا'] = 0;
+          }
+
+          try {
+            await updateDoc(doc(db, 'rooms', ROOM_ID), update);
+          } catch (e) {
+            console.warn('Failsafe auto-advance guessing error:', e);
+          }
+        }
+      }
+    };
+
+    checkAutoAdvanceGuessing();
+  }, [room?.player1Guesses, room?.player2Guesses, room?.status, room?.questions, user, loading]);
+
+  // Auto-recovery: If room is marked 'finished' but score is not 3-0, 4-1, or 4-2 (e.g. 4-3), immediately reopen into set_review!
+  useEffect(() => {
+    if (!room || !user || loading) return;
+    if (room.status === 'finished') {
+      const hWins = room.setWins?.['حسن'] || 0;
+      const nWins = room.setWins?.['نیوشا'] || 0;
+      const winCheck = checkMatchWinCondition(hWins, nWins);
+      if (!winCheck.finished) {
+        console.log('Auto-recovering finished room: score', hWins, nWins, 'is not 3-0, 4-1, or 4-2.');
+        const prevChat = room.chatMessages || [];
+        const resumeMsg: QuizChatMessage = {
+          id: `msg-${Date.now()}-auto-resume`,
+          sender: 'جمینای',
+          text: `✨ ست به پایان رسید و نتیجه ست‌ها ${hWins} - ${nWins} شد!\nمسابقه در حالت‌های ۳-۰، ۴-۱، ۴-۲ یا با رسیدن به ۵ برد به پایان می‌رسد؛ بنابراین رقابت حساس شما با نتیجه ${hWins}-${nWins} ادامه دارد! 🔥\nبرای ست شماره ${(room.totalSetsPlayed || 0) + 1} چه موضوعی را انتخاب می‌کنید؟ با من گپ بزنید تا تاییدش کنیم! ✨`,
+          timestamp: Date.now(),
+        };
+
+        updateDoc(doc(db, 'rooms', ROOM_ID), {
+          status: 'set_review',
+          winner: '',
+          player1Answers: [],
+          player2Answers: [],
+          player1Guesses: [],
+          player2Guesses: [],
+          readyForGuessing: [],
+          questions: [],
+          nextSetTopic: '',
+          topicConfirmation: '',
+          chatMessages: [...prevChat, resumeMsg],
+          lastUpdate: Date.now()
+        }).catch(err => console.warn('Auto-resume error:', err));
+      }
+    }
+  }, [room?.status, room?.setWins, user, loading]);
+
   // Top Nav Bar Header Component for all views
   const TopNavBar = () => (
     <div className="w-full max-w-lg flex items-center justify-between py-1.5 px-2 mb-2 z-50">
@@ -742,7 +958,7 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
           id="quiz-back-home-btn"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 hover:text-white text-xs font-medium transition-all cursor-pointer shadow-sm active:scale-95"
         >
-          <Home className="w-3.5 h-3.5 text-rose-400" />
+          <Home className="w-3.5 h-3.5" style={{ color: theme.accentColor }} />
           <span>بازگشت به خانه</span>
         </button>
 
@@ -755,7 +971,7 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
           {isFullscreen ? (
             <Minimize2 className="w-3.5 h-3.5 text-yellow-400" />
           ) : (
-            <Maximize2 className="w-3.5 h-3.5 text-rose-400" />
+            <Maximize2 className="w-3.5 h-3.5" style={{ color: theme.accentColor }} />
           )}
         </button>
 
@@ -764,16 +980,22 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
           title={isMuted ? 'فعال کردن صدا' : 'قطع صدا'}
           className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95"
         >
-          {isMuted ? <VolumeX className="w-3.5 h-3.5 text-neutral-500" /> : <Volume2 className="w-3.5 h-3.5 text-rose-400" />}
+          {isMuted ? <VolumeX className="w-3.5 h-3.5 text-neutral-500" /> : <Volume2 className="w-3.5 h-3.5" style={{ color: theme.accentColor }} />}
         </button>
       </div>
 
-      {user && (
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] font-bold">
-          <span>{user === 'حسن' ? '🕺' : '💃'}</span>
-          <span>{user}</span>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <ThemeSelector compact />
+        {user && (
+          <div
+            style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder, color: theme.accentColor }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-bold"
+          >
+            <span>{user === 'حسن' ? '🕺' : '💃'}</span>
+            <span>{user}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -815,12 +1037,15 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
     };
 
     return (
-      <div className="fixed inset-0 z-[60] bg-[#0a0208]/95 backdrop-blur-xl flex flex-col justify-center items-center p-3 sm:p-4 font-vazir overflow-y-auto">
+      <div
+        style={{ backgroundColor: theme.bgDark }}
+        className="fixed inset-0 z-[60] backdrop-blur-xl flex flex-col justify-center items-center p-3 sm:p-4 font-vazir overflow-y-auto"
+      >
         <TopNavBar />
 
         {loading && (
           <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-[70] flex flex-col items-center justify-center p-6 text-center">
-            <Loader2 className="w-10 h-10 text-rose-500 animate-spin mb-3" />
+            <Loader2 className="w-10 h-10 animate-spin mb-3" style={{ color: theme.accentColor }} />
             <p className="text-white text-sm font-bold">در حال پردازش...</p>
           </div>
         )}
@@ -828,10 +1053,14 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
         <motion.div 
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="w-full max-w-md bg-[#1a0b18] border border-rose-900/40 rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl my-auto space-y-4"
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.cardBorder }}
+          className="w-full max-w-md border rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl my-auto space-y-4"
         >
-          <div className="w-14 h-14 bg-rose-500/10 rounded-2xl flex items-center justify-center mx-auto border border-rose-500/20 shadow-inner">
-            <Trophy className="w-7 h-7 text-rose-500" />
+          <div
+            style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+            className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto border shadow-inner"
+          >
+            <Trophy className="w-7 h-7" style={{ color: theme.accentColor }} />
           </div>
 
           <div>
@@ -844,7 +1073,10 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
           </div>
 
           {error && (
-            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+            <div
+              style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+              className="p-2.5 rounded-xl border text-xs text-neutral-200"
+            >
               {error}
             </div>
           )}
@@ -852,13 +1084,19 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
           {isUnfinishedGame && !showFreshConfirm ? (
             <div className="space-y-3.5 text-right">
               {/* Active Unfinished Game Card */}
-              <div className="bg-gradient-to-br from-purple-950/40 via-rose-950/30 to-neutral-900/60 border border-rose-500/30 rounded-2xl p-4 shadow-lg space-y-2.5">
+              <div
+                style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+                className="border rounded-2xl p-4 shadow-lg space-y-2.5"
+              >
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-bold">
                     <span className="w-2 h-2 rounded-full bg-green-400 animate-ping inline-block" />
                     <span>بازی ناتمام قبلی</span>
                   </span>
-                  <span className="text-xs font-black text-rose-300 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20">
+                  <span
+                    style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder, color: theme.accentColor }}
+                    className="text-xs font-black px-2.5 py-1 rounded-lg border"
+                  >
                     ست {currentSetNum}
                   </span>
                 </div>
@@ -870,14 +1108,14 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                   </div>
                   <div className="flex items-center justify-between text-neutral-300">
                     <span className="text-neutral-400">مجموع بردهای ست‌ها:</span>
-                    <span className="font-bold text-rose-300 text-[11px]">
+                    <span className="font-bold text-[11px]" style={{ color: theme.accentColor }}>
                       حسن ({wins['حسن'] || 0}) ⚔️ نیوشا ({wins['نیوشا'] || 0})
                     </span>
                   </div>
                   {topic && (
                     <div className="flex items-center justify-between text-neutral-300">
                       <span className="text-neutral-400">موضوع ست:</span>
-                      <span className="font-bold text-purple-300 text-[11px] truncate max-w-[180px]">«{topic}»</span>
+                      <span className="font-bold text-[11px] truncate max-w-[180px]" style={{ color: theme.accentColor }}>«{topic}»</span>
                     </div>
                   )}
                 </div>
@@ -889,14 +1127,16 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                 <div className="grid grid-cols-2 gap-2.5">
                   <button 
                     onClick={() => resumeExistingGame('حسن')}
-                    className="py-3 px-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-bold flex flex-col items-center justify-center gap-1 shadow-lg shadow-rose-600/20 active:scale-95 transition-all cursor-pointer text-xs"
+                    style={{ backgroundColor: theme.primaryColor }}
+                    className="py-3 px-2 rounded-xl text-white font-bold flex flex-col items-center justify-center gap-1 shadow-lg active:scale-95 transition-all cursor-pointer text-xs hover:brightness-110"
                   >
                     <span className="text-xl">🕺</span>
                     <span>ورود به عنوان حسن</span>
                   </button>
                   <button 
                     onClick={() => resumeExistingGame('نیوشا')}
-                    className="py-3 px-2 rounded-xl bg-gradient-to-r from-pink-600 to-pink-700 hover:from-pink-500 hover:to-pink-600 text-white font-bold flex flex-col items-center justify-center gap-1 shadow-lg shadow-pink-600/20 active:scale-95 transition-all cursor-pointer text-xs"
+                    style={{ backgroundColor: theme.primaryColor }}
+                    className="py-3 px-2 rounded-xl text-white font-bold flex flex-col items-center justify-center gap-1 shadow-lg active:scale-95 transition-all cursor-pointer text-xs hover:brightness-110"
                   >
                     <span className="text-xl">💃</span>
                     <span>ورود به عنوان نیوشا</span>
@@ -907,7 +1147,7 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               <div className="pt-2 border-t border-white/5 text-center">
                 <button
                   onClick={() => setShowFreshConfirm(true)}
-                  className="text-neutral-400 hover:text-rose-400 text-[11px] transition-colors flex items-center justify-center gap-1.5 mx-auto py-1.5 cursor-pointer underline underline-offset-4"
+                  className="text-neutral-400 hover:text-white text-[11px] transition-colors flex items-center justify-center gap-1.5 mx-auto py-1.5 cursor-pointer underline underline-offset-4"
                 >
                   <RotateCcw className="w-3 h-3 text-neutral-500" />
                   <span>یا شروع مسابقه کاملاً جدید از ابتدا (صفر کردن بازی)</span>
@@ -916,9 +1156,15 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
             </div>
           ) : showFreshConfirm ? (
             /* Confirm Fresh Restart Modal View */
-            <div className="space-y-3.5 text-center bg-rose-950/30 border border-rose-500/20 rounded-2xl p-4">
-              <div className="w-10 h-10 bg-rose-500/20 rounded-xl flex items-center justify-center mx-auto text-rose-400">
-                <AlertCircle className="w-5 h-5" />
+            <div
+              style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+              className="space-y-3.5 text-center border rounded-2xl p-4"
+            >
+              <div
+                style={{ backgroundColor: theme.cardBg, borderColor: theme.pillBorder }}
+                className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto border"
+              >
+                <AlertCircle className="w-5 h-5" style={{ color: theme.accentColor }} />
               </div>
               <div>
                 <p className="text-white text-xs font-bold mb-1">شروع مسابقه جدید از ست اول؟</p>
@@ -930,13 +1176,15 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               <div className="grid grid-cols-2 gap-2.5">
                 <button 
                   onClick={() => startNewGameFresh('حسن')}
-                  className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-md"
+                  style={{ backgroundColor: theme.primaryColor }}
+                  className="py-2.5 rounded-xl text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-md hover:brightness-110"
                 >
                   <span>🕺 من حسنم</span>
                 </button>
                 <button 
                   onClick={() => startNewGameFresh('نیوشا')}
-                  className="py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-md"
+                  style={{ backgroundColor: theme.primaryColor }}
+                  className="py-2.5 rounded-xl text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-md hover:brightness-110"
                 >
                   <span>💃 من نیوشام</span>
                 </button>
@@ -955,14 +1203,16 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               <div className="grid grid-cols-2 gap-3">
                 <button 
                   onClick={() => { sound.playClick(); requestGameFullscreen(); setUser('حسن'); setError(null); }}
-                  className="py-3.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-100 hover:bg-rose-900/60 transition-all cursor-pointer font-bold flex flex-col items-center gap-1.5 active:scale-95 shadow-md"
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                  className="py-3.5 rounded-xl border text-neutral-100 hover:brightness-125 transition-all cursor-pointer font-bold flex flex-col items-center gap-1.5 active:scale-95 shadow-md"
                 >
                   <span className="text-2xl">🕺</span>
                   <span className="text-sm">من حسنم</span>
                 </button>
                 <button 
                   onClick={() => { sound.playClick(); requestGameFullscreen(); setUser('نیوشا'); setError(null); }}
-                  className="py-3.5 rounded-xl bg-pink-950/40 border border-pink-500/30 text-pink-100 hover:bg-pink-900/60 transition-all cursor-pointer font-bold flex flex-col items-center gap-1.5 active:scale-95 shadow-md"
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                  className="py-3.5 rounded-xl border text-neutral-100 hover:brightness-125 transition-all cursor-pointer font-bold flex flex-col items-center gap-1.5 active:scale-95 shadow-md"
                 >
                   <span className="text-2xl">💃</span>
                   <span className="text-sm">من نیوشام</span>
@@ -976,14 +1226,20 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-[#0a0208]/95 backdrop-blur-xl flex flex-col items-center justify-between p-2 sm:p-4 font-vazir overflow-y-auto">
+    <div
+      style={{ backgroundColor: theme.bgDark }}
+      className="fixed inset-0 z-[60] backdrop-blur-xl flex flex-col items-center justify-between p-2 sm:p-4 font-vazir overflow-y-auto"
+    >
       <TopNavBar />
 
       {loading && (
         <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-[70] flex flex-col items-center justify-center p-6 text-center">
           <div className="relative mb-6">
-            <div className="absolute inset-0 bg-rose-500/20 rounded-full animate-ping"></div>
-            <Loader2 className="w-12 h-12 text-rose-500 animate-spin relative" />
+            <div
+              style={{ backgroundColor: theme.primaryColor }}
+              className="absolute inset-0 opacity-20 rounded-full animate-ping"
+            />
+            <Loader2 className="w-12 h-12 animate-spin relative" style={{ color: theme.accentColor }} />
           </div>
           <motion.p 
             initial={{ opacity: 0, y: 10 }}
@@ -992,7 +1248,7 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
           >
             {error && error.includes('طول کشیده') ? 'هوش مصنوعی داره سنگ تمام میذاره...' : 'جمینای در حال طراحی سوالات اختصاصی...'}
           </motion.p>
-          <p className="text-rose-300/70 text-xs animate-pulse">
+          <p className="text-xs animate-pulse text-neutral-300">
             ۱۰ سوال ویژه با توجه به موضوع انتخابی براتون آماده می‌شه ❤️
           </p>
         </div>
@@ -1006,10 +1262,14 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               initial={{ y: 15, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -15, opacity: 0 }}
-              className="w-full bg-[#1a0b18] border border-rose-900/40 rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl"
+              style={{ backgroundColor: theme.cardBg, borderColor: theme.cardBorder }}
+              className="w-full border rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl"
             >
-              <div className="w-14 h-14 bg-rose-500/10 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-rose-500/20">
-                <Users className="w-7 h-7 text-rose-500" />
+              <div
+                style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 border shadow-inner"
+              >
+                <Users className="w-7 h-7" style={{ color: theme.accentColor }} />
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white mb-1">آماده شروع بازی دونفره؟</h2>
               <p className="text-xs text-neutral-400 mb-4">
@@ -1020,7 +1280,8 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                 <button 
                   onClick={createGame}
                   disabled={loading}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 text-white font-bold shadow-lg hover:shadow-rose-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95 text-sm"
+                  style={{ backgroundColor: theme.primaryColor }}
+                  className="w-full py-3.5 rounded-xl text-white font-bold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95 text-sm hover:brightness-110"
                 >
                   <Play className="w-4 h-4" />
                   <span>ساخت اتاق بازی دونفره</span>
@@ -1028,18 +1289,22 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
 
                 <button 
                   onClick={resetGame}
-                  className="text-neutral-500 hover:text-neutral-300 text-[11px] transition-colors py-1 block w-full text-center underline cursor-pointer"
+                  className="text-neutral-400 hover:text-white text-[11px] transition-colors py-1 block w-full text-center underline cursor-pointer"
                 >
                   پاکسازی اتاق (شروع دوباره از اول)
                 </button>
               </div>
 
               {error && (
-                <div className="mt-3 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center">
-                  <p className="text-rose-400 text-xs font-bold mb-1.5">{error}</p>
+                <div
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+                  className="mt-3 p-2.5 rounded-xl border text-center"
+                >
+                  <p className="text-xs font-bold mb-1.5 text-rose-400">{error}</p>
                   <button 
                     onClick={() => { setError(null); createGame(); }}
-                    className="py-1 px-3 bg-rose-500 text-white rounded-lg text-[10px] font-bold hover:bg-rose-400 transition-colors cursor-pointer"
+                    style={{ backgroundColor: theme.primaryColor }}
+                    className="py-1 px-3 text-white rounded-lg text-[10px] font-bold transition-colors cursor-pointer hover:brightness-110"
                   >
                     تلاش مجدد 🔄
                   </button>
@@ -1051,12 +1316,19 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               key="waiting"
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="w-full bg-[#1a0b18] border border-rose-900/40 rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl"
+              style={{ backgroundColor: theme.cardBg, borderColor: theme.cardBorder }}
+              className="w-full border rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl"
             >
               <div className="relative w-16 h-16 mx-auto mb-4">
-                <div className="absolute inset-0 bg-rose-500/20 rounded-full animate-ping"></div>
-                <div className="relative bg-rose-500/10 rounded-full w-full h-full flex items-center justify-center border border-rose-500/30">
-                  <Loader2 className="w-8 h-8 text-rose-500 animate-spin" />
+                <div
+                  style={{ backgroundColor: theme.primaryColor }}
+                  className="absolute inset-0 opacity-20 rounded-full animate-ping"
+                />
+                <div
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                  className="relative rounded-full w-full h-full flex items-center justify-center border"
+                >
+                  <Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.accentColor }} />
                 </div>
               </div>
               <h2 className="text-xl font-bold text-white mb-1">در انتظار اتصال پارتنر...</h2>
@@ -1064,23 +1336,48 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               <div className="space-y-4 my-4">
                 <div className="flex items-center justify-center gap-4">
                   <div className="flex flex-col items-center">
-                    <div className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center text-xl transition-all duration-300 ${room.players?.includes('حسن') ? 'border-rose-500 bg-rose-500/20' : 'border-white/10 bg-white/5 opacity-20'}`}>
+                    <div
+                      style={{
+                        borderColor: room.players?.includes('حسن') ? theme.accentColor : 'rgba(255,255,255,0.1)',
+                        backgroundColor: room.players?.includes('حسن') ? theme.pillBg : 'rgba(255,255,255,0.05)',
+                      }}
+                      className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center text-xl transition-all duration-300 ${room.players?.includes('حسن') ? 'opacity-100' : 'opacity-20'}`}
+                    >
                       {room.players?.includes('حسن') ? '🕺' : '?'}
                     </div>
-                    <span className={`text-[11px] mt-1 font-bold ${room.players?.includes('حسن') ? 'text-rose-400' : 'text-neutral-600'}`}>حسن</span>
+                    <span
+                      style={{ color: room.players?.includes('حسن') ? theme.accentColor : undefined }}
+                      className={`text-[11px] mt-1 font-bold ${room.players?.includes('حسن') ? '' : 'text-neutral-600'}`}
+                    >
+                      حسن
+                    </span>
                   </div>
                   
-                  <div className="text-rose-500 font-bold text-sm">VS</div>
+                  <div className="font-bold text-sm" style={{ color: theme.accentColor }}>VS</div>
 
                   <div className="flex flex-col items-center">
-                    <div className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center text-xl transition-all duration-300 ${room.players?.includes('نیوشا') ? 'border-pink-500 bg-pink-500/20' : 'border-white/10 bg-white/5 opacity-20'}`}>
+                    <div
+                      style={{
+                        borderColor: room.players?.includes('نیوشا') ? theme.accentColor : 'rgba(255,255,255,0.1)',
+                        backgroundColor: room.players?.includes('نیوشا') ? theme.pillBg : 'rgba(255,255,255,0.05)',
+                      }}
+                      className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center text-xl transition-all duration-300 ${room.players?.includes('نیوشا') ? 'opacity-100' : 'opacity-20'}`}
+                    >
                       {room.players?.includes('نیوشا') ? '💃' : '?'}
                     </div>
-                    <span className={`text-[11px] mt-1 font-bold ${room.players?.includes('نیوشا') ? 'text-pink-400' : 'text-neutral-600'}`}>نیوشا</span>
+                    <span
+                      style={{ color: room.players?.includes('نیوشا') ? theme.accentColor : undefined }}
+                      className={`text-[11px] mt-1 font-bold ${room.players?.includes('نیوشا') ? '' : 'text-neutral-600'}`}
+                    >
+                      نیوشا
+                    </span>
                   </div>
                 </div>
                 
-                <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                <div
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+                  className="rounded-xl p-3 border"
+                >
                   <p className="text-neutral-300 text-xs leading-relaxed">
                     {room.players?.length === 1 
                       ? (room.players.includes(user) ? 'اتاق آماده است؛ به محض ورود طرف مقابل، مستقیماً وارد اتاق استراحت و هماهنگی موضوع با جمینای می‌شید!' : `${room.players[0]} منتظرته، وارد اتاق شو!`)
@@ -1092,24 +1389,29 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               {!room.players?.includes(user) ? (
                 <button 
                   onClick={joinGame}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 text-white font-bold mb-2 cursor-pointer hover:scale-[1.01] transition-all shadow-lg shadow-rose-500/20 text-sm active:scale-95"
+                  style={{ backgroundColor: theme.primaryColor }}
+                  className="w-full py-3.5 rounded-xl text-white font-bold mb-2 cursor-pointer transition-all shadow-lg text-sm active:scale-95 hover:brightness-110"
                 >
                   اتصال به اتاق و پارتنر 🚀
                 </button>
               ) : (
-                <div className="py-2 text-rose-400 text-xs font-medium animate-pulse mb-2">
+                <div
+                  style={{ color: theme.accentColor }}
+                  className="py-2 text-xs font-medium animate-pulse mb-2"
+                >
                   در حال انتظار برای ورود طرف مقابل...
                 </div>
               )}
 
-              <button onClick={resetGame} className="text-neutral-500 hover:text-neutral-300 text-[11px] transition-colors underline cursor-pointer">لغو و بازنشانی اتاق</button>
+              <button onClick={resetGame} className="text-neutral-400 hover:text-white text-[11px] transition-colors underline cursor-pointer">لغو و بازنشانی اتاق</button>
             </motion.div>
           ) : room.status === 'review' || room.status === 'set_review' ? (
             <motion.div 
               key="review"
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="w-full bg-[#1a0b18] border border-rose-900/40 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-center shadow-2xl"
+              style={{ backgroundColor: theme.cardBg, borderColor: theme.cardBorder }}
+              className="w-full border rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-center shadow-2xl"
             >
               <div className="flex items-center justify-between mb-3">
                 {/* Restart Request Button on right side of lounge header */}
@@ -1117,14 +1419,18 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                   onClick={handleRequestRestart}
                   disabled={!!room.resetRequestedBy}
                   id="quiz-restart-hand-btn"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 hover:text-white text-[10px] font-bold transition-all cursor-pointer disabled:opacity-40 active:scale-95 shadow-sm"
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-xl border text-neutral-300 hover:text-white text-[10px] font-bold transition-all cursor-pointer disabled:opacity-40 active:scale-95 shadow-sm"
                   title="درخواست شروع مجدد دست و بازی از اول"
                 >
-                  <RotateCcw className="w-3 h-3 text-rose-400" />
+                  <RotateCcw className="w-3 h-3" style={{ color: theme.accentColor }} />
                   <span>شروع مجدد دست</span>
                 </button>
 
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
+                <div
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder, color: theme.accentColor }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold"
+                >
                   <Coffee className="w-3.5 h-3.5" />
                   <span>{room.status === 'review' ? 'زمان استراحت و مرور' : 'اتاق استراحت و هماهنگی با جمینای ✨'}</span>
                 </div>
@@ -1141,7 +1447,8 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="my-3 p-3 rounded-2xl bg-gradient-to-r from-amber-950/60 to-rose-950/60 border border-amber-500/40 text-right shadow-lg"
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+                  className="my-3 p-3 rounded-2xl border text-right shadow-lg"
                 >
                   <div className="flex items-center gap-2 mb-1.5">
                     <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
@@ -1179,14 +1486,20 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
 
               {/* Gemini Interactive Chat in Break Room */}
               {room.status === 'set_review' && (
-                <div className="my-3 bg-gradient-to-b from-purple-950/20 via-black/40 to-black/60 rounded-2xl p-3 sm:p-4 border border-purple-500/20 text-right relative overflow-hidden shadow-inner">
+                <div
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+                  className="my-3 rounded-2xl p-3 sm:p-4 border text-right relative overflow-hidden shadow-inner"
+                >
                   {/* Header */}
                   <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/5">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center border border-purple-500/40">
-                        <Sparkles className="w-3 h-3 text-purple-300" />
+                      <div
+                        style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                        className="w-5 h-5 rounded-full flex items-center justify-center border"
+                      >
+                        <Sparkles className="w-3 h-3" style={{ color: theme.accentColor }} />
                       </div>
-                      <span className="text-xs text-purple-200 font-black">گپ و تفاهم با جمینای ✨</span>
+                      <span className="text-xs font-black" style={{ color: theme.accentColor }}>گپ و تفاهم با جمینای ✨</span>
                     </div>
                     <span className="text-[10px] text-neutral-400">
                       {((room.totalSetsPlayed || 0) === 0) ? 'هماهنگی ست اول' : `ست ${(room.totalSetsPlayed || 0) + 1}`}
@@ -1198,7 +1511,8 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="mb-2.5 p-2 rounded-xl bg-gradient-to-r from-emerald-950/60 to-rose-950/60 border border-emerald-500/40 flex items-center justify-between shadow-md"
+                      style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                      className="mb-2.5 p-2 rounded-xl border flex items-center justify-between shadow-md"
                     >
                       <div className="flex items-center gap-1.5 overflow-hidden">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -1224,8 +1538,11 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                   >
                     {(!room.chatMessages || room.chatMessages.length === 0) ? (
                       <div className="text-center py-4 px-2 space-y-1.5">
-                        <div className="w-9 h-9 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto text-purple-300">
-                          <Bot className="w-5 h-5" />
+                        <div
+                          style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                          className="w-9 h-9 rounded-2xl border flex items-center justify-center mx-auto"
+                        >
+                          <Bot className="w-5 h-5" style={{ color: theme.accentColor }} />
                         </div>
                         <p className="text-xs font-bold text-neutral-200">
                           سلام حسن و نیوشای دوست‌داشتنی! 🌸
@@ -1252,18 +1569,22 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
 
                           {/* Bubble */}
                           <div
-                            className={`max-w-[88%] p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                            style={{
+                              backgroundColor: msg.sender === 'جمینای' 
+                                ? theme.pillBg 
+                                : (msg.sender === user ? theme.primaryColor : 'rgba(255,255,255,0.1)'),
+                              borderColor: msg.sender === 'جمینای' ? theme.pillBorder : 'transparent'
+                            }}
+                            className={`max-w-[88%] p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm border ${
                               msg.sender === 'جمینای'
-                                ? 'bg-gradient-to-br from-purple-900/40 to-neutral-900/90 border border-purple-500/30 text-neutral-100 rounded-tl-none text-right'
-                                : msg.sender === 'حسن'
-                                ? 'bg-rose-600/20 border border-rose-500/30 text-rose-100 rounded-tr-none text-right'
-                                : 'bg-pink-600/20 border border-pink-500/30 text-pink-100 rounded-tr-none text-right'
+                                ? 'text-neutral-100 rounded-tl-none text-right'
+                                : 'text-white rounded-tr-none text-right'
                             }`}
                           >
                             <p className="whitespace-pre-wrap">{msg.text}</p>
                             
                             {msg.confirmedTopic && (
-                              <div className="mt-1.5 pt-1.5 border-t border-purple-500/30 flex items-center gap-1 text-[10px] text-emerald-300 font-bold">
+                              <div className="mt-1.5 pt-1.5 border-t border-white/20 flex items-center gap-1 text-[10px] text-emerald-300 font-bold">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
                                 <span>موضوع تایید شد: «{msg.confirmedTopic}»</span>
                               </div>
@@ -1274,7 +1595,10 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                     )}
 
                     {chatLoading && (
-                      <div className="flex items-center gap-2 p-2 text-[10px] text-purple-300 bg-purple-950/30 rounded-xl w-fit border border-purple-500/20 animate-pulse">
+                      <div
+                        style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder, color: theme.accentColor }}
+                        className="flex items-center gap-2 p-2 text-[10px] rounded-xl w-fit border animate-pulse"
+                      >
                         <Loader2 className="w-3 h-3 animate-spin" />
                         <span>جمینای در حال پاسخ دادن...</span>
                       </div>
@@ -1309,12 +1633,13 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleSendChatMessage()}
                       placeholder="با جمینای گپ بزنید، ایده بگیرید یا موضوع رو بگید..."
-                      className="flex-1 bg-black/50 border border-white/10 rounded-xl py-2 px-3 text-xs text-white placeholder:text-neutral-500 focus:border-purple-500/50 transition-all outline-none"
+                      className="flex-1 bg-black/50 border border-white/10 rounded-xl py-2 px-3 text-xs text-white placeholder:text-neutral-500 focus:border-white/30 transition-all outline-none"
                     />
                     <button 
                       onClick={() => handleSendChatMessage()}
                       disabled={chatLoading || !chatInput.trim()}
-                      className="bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 disabled:from-neutral-800 disabled:to-neutral-800 text-white p-2.5 rounded-xl transition-all shadow-md flex items-center justify-center min-w-[42px] cursor-pointer active:scale-95"
+                      style={{ backgroundColor: theme.primaryColor }}
+                      className="text-white p-2.5 rounded-xl transition-all shadow-md flex items-center justify-center min-w-[42px] cursor-pointer active:scale-95 hover:brightness-110 disabled:opacity-40"
                     >
                       {chatLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                     </button>
@@ -1341,13 +1666,16 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               </div>
 
               {/* Set & Match Score Overview */}
-              <div className="p-2.5 rounded-xl bg-rose-500/5 border border-rose-500/10 mb-3">
+              <div
+                style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+                className="p-2.5 rounded-xl border mb-3"
+              >
                 <div className="flex justify-between items-center px-2">
                   <div className="text-center">
                     <p className="text-[9px] text-neutral-400">ست‌های حسن</p>
                     <p className="text-base font-black text-white">{room.setWins?.['حسن'] || 0}</p>
                   </div>
-                  <div className="text-rose-500/40 font-black text-xs">
+                  <div className="font-black text-xs" style={{ color: theme.accentColor }}>
                     {(room.totalSetsPlayed || 0) === 0 ? 'شروع مسابقه' : `ست‌های بازی شده: ${room.totalSetsPlayed}`}
                   </div>
                   <div className="text-center">
@@ -1366,8 +1694,11 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
 
                 if (isGenerating) {
                   return (
-                    <div className="w-full py-3.5 rounded-xl bg-purple-950/60 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center justify-center gap-2 shadow-lg animate-pulse">
-                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                    <div
+                      style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder, color: theme.accentColor }}
+                      className="w-full py-3.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 shadow-lg animate-pulse"
+                    >
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       <span>جمینای در حال طراحی ۱۰ سوال اختصاصی... ✨</span>
                     </div>
                   );
@@ -1378,12 +1709,12 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                     <div className="space-y-1.5">
                       <button
                         disabled
-                        className="w-full py-3.5 rounded-xl bg-white/5 border border-purple-500/20 text-neutral-400 font-bold flex items-center justify-center gap-2 text-xs cursor-not-allowed opacity-80"
+                        className="w-full py-3.5 rounded-xl bg-white/5 border border-white/10 text-neutral-400 font-bold flex items-center justify-center gap-2 text-xs cursor-not-allowed opacity-80"
                       >
-                        <Lock className="w-3.5 h-3.5 text-purple-400" />
+                        <Lock className="w-3.5 h-3.5" style={{ color: theme.accentColor }} />
                         <span>ابتدا در چت بالا با جمینای سر موضوع به تفاهم برسید</span>
                       </button>
-                      <p className="text-[10px] text-purple-300/80 text-center font-medium">
+                      <p className="text-[10px] text-neutral-400 text-center font-medium">
                         💡 یک پیام در چت بنویسید یا دکمه‌های پیشنهادی بالا را بزنید تا موضوع تایید شود.
                       </p>
                     </div>
@@ -1393,10 +1724,11 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                 return (
                   <button
                     onClick={toggleReady}
+                    style={{ backgroundColor: isUserReady ? 'rgba(34, 197, 94, 0.2)' : theme.primaryColor }}
                     className={`w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all cursor-pointer text-xs sm:text-sm active:scale-95 shadow-md ${
                       isUserReady
-                        ? 'bg-green-600/20 border border-green-500/40 text-green-400'
-                        : 'bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 text-white shadow-rose-500/20 hover:scale-[1.01]'
+                        ? 'border border-green-500/40 text-green-400'
+                        : 'text-white hover:brightness-110'
                     }`}
                   >
                     {isUserReady ? (
@@ -1420,25 +1752,36 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               key="playing"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="w-full bg-[#1a0b18] border border-rose-900/40 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xl"
+              style={{ backgroundColor: theme.cardBg, borderColor: theme.cardBorder }}
+              className="w-full border rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xl"
             >
               {/* Top Scorebar inside card */}
               <div className="flex justify-between items-center mb-3 pb-2.5 border-b border-white/5">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-rose-500/10 rounded-full flex items-center justify-center text-base">🕺</div>
+                  <div
+                    style={{ backgroundColor: theme.pillBg }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-base"
+                  >
+                    🕺
+                  </div>
                   <div className="text-right">
                     <p className="text-[9px] text-neutral-400">امتیاز حسن</p>
-                    <p className="text-sm font-bold text-rose-500">{(room.scores || {})['حسن'] || 0}</p>
+                    <p className="text-sm font-bold" style={{ color: theme.accentColor }}>
+                      {(room.scores || {})['حسن'] || 0}
+                    </p>
                   </div>
                 </div>
 
                 <div className="text-center">
-                  <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10 mx-auto mb-1">
-                    <span className="text-[10px] font-bold text-rose-300">{room.setWins?.['حسن'] || 0}</span>
-                    <span className="text-[9px] text-neutral-500">ست‌ها</span>
-                    <span className="text-[10px] font-bold text-pink-300">{room.setWins?.['نیوشا'] || 0}</span>
+                  <div
+                    style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                    className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border mx-auto mb-1"
+                  >
+                    <span className="text-[10px] font-bold text-white">{room.setWins?.['حسن'] || 0}</span>
+                    <span className="text-[9px] text-neutral-400">ست‌ها</span>
+                    <span className="text-[10px] font-bold text-white">{room.setWins?.['نیوشا'] || 0}</span>
                   </div>
-                  <p className="text-[10px] text-rose-300 font-medium">
+                  <p className="text-[10px] font-medium" style={{ color: theme.accentColor }}>
                     {room.status === 'playing' ? 'بخش ۱: درباره خودت' : 'بخش ۲: حدس بزن طرفت چی گفته'}
                   </p>
                 </div>
@@ -1446,9 +1789,16 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                 <div className="flex items-center gap-2">
                   <div className="text-left">
                     <p className="text-[9px] text-neutral-400">امتیاز نیوشا</p>
-                    <p className="text-sm font-bold text-pink-500">{(room.scores || {})['نیوشا'] || 0}</p>
+                    <p className="text-sm font-bold" style={{ color: theme.accentColor }}>
+                      {(room.scores || {})['نیوشا'] || 0}
+                    </p>
                   </div>
-                  <div className="w-8 h-8 bg-pink-500/10 rounded-full flex items-center justify-center text-base">💃</div>
+                  <div
+                    style={{ backgroundColor: theme.pillBg }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-base"
+                  >
+                    💃
+                  </div>
                 </div>
               </div>
 
@@ -1473,26 +1823,38 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                   return (
                     <div className="text-center py-8">
                       <div className="relative w-16 h-16 mx-auto mb-4">
-                        <div className="absolute inset-0 bg-rose-500/20 rounded-full animate-ping"></div>
-                        <div className="relative bg-black border border-rose-500/30 rounded-full w-full h-full flex items-center justify-center">
-                          <Sparkles className="w-7 h-7 text-rose-500 animate-pulse" />
+                        <div
+                          style={{ backgroundColor: theme.primaryColor }}
+                          className="absolute inset-0 opacity-20 rounded-full animate-ping"
+                        />
+                        <div
+                          style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                          className="relative border rounded-full w-full h-full flex items-center justify-center"
+                        >
+                          <Sparkles className="w-7 h-7 animate-pulse" style={{ color: theme.accentColor }} />
                         </div>
                       </div>
                       <h4 className="text-base font-bold text-white mb-1">جمینای در حال طراحی سوالات اختصاصی...</h4>
-                      <p className="text-rose-300/60 text-xs px-4">
+                      <p className="text-xs px-4 text-neutral-400">
                         صبر کنید تا سوالات ست جدید آماده بشن ✨
                       </p>
                     </div>
                   );
                 }
 
-                if (currentIdx >= 5 || currentIdx >= currentPhaseQuestions.length) {
+                if (currentIdx >= currentPhaseQuestions.length) {
                   return (
                     <div className="text-center py-8">
                       <div className="relative w-14 h-14 mx-auto mb-3">
-                        <div className="absolute inset-0 bg-rose-500/20 rounded-full animate-ping"></div>
-                        <div className="relative bg-rose-500/10 rounded-full w-full h-full flex items-center justify-center">
-                          <Users className="w-7 h-7 text-rose-500" />
+                        <div
+                          style={{ backgroundColor: theme.primaryColor }}
+                          className="absolute inset-0 opacity-20 rounded-full animate-ping"
+                        />
+                        <div
+                          style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                          className="relative rounded-full w-full h-full flex items-center justify-center border"
+                        >
+                          <Users className="w-7 h-7" style={{ color: theme.accentColor }} />
                         </div>
                       </div>
                       <h4 className="text-white text-sm font-bold mb-1">منتظر {user === 'حسن' ? 'نیوشا' : 'حسن'} باش...</h4>
@@ -1510,13 +1872,19 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
 
                 return (
                   <div className="space-y-3">
-                    <div className="bg-rose-500/5 p-3.5 rounded-xl border border-rose-500/10 text-center">
-                      <div className="flex items-center justify-center gap-1.5 text-[10px] text-rose-400 mb-1 font-bold">
-                        <span>سوال {Math.min(5, currentIdx + 1)} از ۵</span>
+                    <div
+                      style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                      className="p-3.5 rounded-xl border text-center"
+                    >
+                      <div
+                        style={{ color: theme.accentColor }}
+                        className="flex items-center justify-center gap-1.5 text-[10px] mb-1 font-bold"
+                      >
+                        <span>سوال {currentIdx + 1} از {currentPhaseQuestions.length}</span>
                       </div>
                       <h3 className="text-xs sm:text-sm font-bold text-white leading-relaxed">{question.text}</h3>
                       {room.status === 'guessing' && (
-                        <p className="mt-1 text-[10px] text-rose-300">حدس بزن {user === 'حسن' ? 'نیوشا' : 'حسن'} کدام گزینه را انتخاب کرده؟</p>
+                        <p className="mt-1 text-[10px] text-neutral-300">حدس بزن {user === 'حسن' ? 'نیوشا' : 'حسن'} کدام گزینه را انتخاب کرده؟</p>
                       )}
                     </div>
 
@@ -1525,21 +1893,50 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                         const isCorrect = feedback?.correctIdx === idx;
                         const isSelected = selectedOption === idx;
                         
+                        let optionBg = 'rgba(255,255,255,0.05)';
+                        let optionBorder = 'rgba(255,255,255,0.1)';
+                        let optionText = 'text-neutral-300';
+
+                        if (isSelected) {
+                          if (feedback) {
+                            if (feedback.isCorrect) {
+                              optionBg = '#16a34a';
+                              optionBorder = '#22c55e';
+                              optionText = 'text-white';
+                            } else {
+                              optionBg = '#dc2626';
+                              optionBorder = '#ef4444';
+                              optionText = 'text-white';
+                            }
+                          } else {
+                            optionBg = theme.primaryColor;
+                            optionBorder = theme.accentColor;
+                            optionText = 'text-white';
+                          }
+                        } else if (feedback && isCorrect) {
+                          optionBg = 'rgba(34,197,94,0.2)';
+                          optionBorder = 'rgba(34,197,94,0.5)';
+                          optionText = 'text-green-300';
+                        }
+
                         return (
                           <button
                             key={idx}
                             disabled={!!feedback}
                             onClick={() => { sound.playClick(); setSelectedOption(idx); }}
-                            className={`w-full p-3 rounded-xl text-right transition-all border relative overflow-hidden ${
-                              isSelected 
-                                ? (feedback ? (feedback.isCorrect ? 'bg-green-500 border-green-400 text-white' : 'bg-red-500 border-red-400 text-white') : 'bg-rose-600 border-rose-500 text-white shadow-md') 
-                                : (feedback && isCorrect ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-white/5 border-white/10 text-neutral-300')
-                            } ${feedback ? 'cursor-default' : 'hover:bg-white/10 cursor-pointer active:scale-[0.99]'}`}
+                            style={{ backgroundColor: optionBg, borderColor: optionBorder }}
+                            className={`w-full p-3 rounded-xl text-right transition-all border relative overflow-hidden ${optionText} ${
+                              feedback ? 'cursor-default' : 'hover:brightness-110 cursor-pointer active:scale-[0.99]'
+                            }`}
                           >
                             <div className="flex items-center gap-2.5 relative z-10">
-                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                isSelected ? 'bg-white text-rose-600' : 'bg-white/10 text-neutral-400'
-                              }`}>
+                              <div
+                                style={{
+                                  backgroundColor: isSelected ? '#ffffff' : 'rgba(255,255,255,0.1)',
+                                  color: isSelected ? theme.primaryColor : '#d4d4d4'
+                                }}
+                                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold"
+                              >
                                 {idx + 1}
                               </div>
                               <span className="text-xs sm:text-sm font-medium">{option}</span>
@@ -1563,7 +1960,8 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                       <button
                         onClick={submitAnswer}
                         disabled={selectedOption === null}
-                        className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 text-white font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 transition-all cursor-pointer shadow-md text-xs sm:text-sm active:scale-95"
+                        style={{ backgroundColor: theme.primaryColor }}
+                        className="w-full py-3 rounded-xl text-white font-bold flex items-center justify-center gap-1.5 disabled:opacity-30 transition-all cursor-pointer shadow-md text-xs sm:text-sm active:scale-95 hover:brightness-110"
                       >
                         <span>ثبت پاسخ</span>
                         <ChevronRight className="w-4 h-4" />
@@ -1571,7 +1969,10 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                     )}
                     
                     {feedback && (
-                      <div className="text-center py-1 animate-pulse text-rose-300 text-[10px]">
+                      <div
+                        style={{ color: theme.accentColor }}
+                        className="text-center py-1 animate-pulse text-[10px]"
+                      >
                         در حال ثبت نتیجه...
                       </div>
                     )}
@@ -1584,15 +1985,22 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               key="finished"
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="w-full bg-[#1a0b18] border border-rose-900/40 rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl"
+              style={{ backgroundColor: theme.cardBg, borderColor: theme.cardBorder }}
+              className="w-full border rounded-2xl sm:rounded-3xl p-5 sm:p-6 text-center shadow-2xl"
             >
-              <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-3 border border-yellow-500/20">
+              <div
+                style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border shadow-inner"
+              >
                 <Trophy className="w-8 h-8 text-yellow-500" />
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white mb-1">پایان مسابقه! 🎉</h2>
               
               <div className="my-4 space-y-3">
-                <div className="p-4 rounded-xl bg-gradient-to-br from-rose-950/40 to-pink-950/40 border border-rose-500/30">
+                <div
+                  style={{ backgroundColor: theme.pillBg, borderColor: theme.cardBorder }}
+                  className="p-4 rounded-xl border"
+                >
                   <p className="text-neutral-400 text-xs mb-1">برنده نهایی مسابقه:</p>
                   <p className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-500">
                     {room.winner === 'برابری' ? 'هر دو نفر برنده و ستاره‌اید! ❤️' : `🏆 ${room.winner} برنده شد! 🏆`}
@@ -1603,7 +2011,7 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
                       <span className="text-[10px] text-neutral-400">حسن</span>
                       <span className="text-sm font-bold text-white">{room.setWins?.['حسن'] || 0} ست</span>
                     </div>
-                    <div className="text-neutral-600 font-bold text-xs">VS</div>
+                    <div className="text-neutral-500 font-bold text-xs">VS</div>
                     <div className="flex flex-col items-center">
                       <span className="text-lg">💃</span>
                       <span className="text-[10px] text-neutral-400">نیوشا</span>
@@ -1614,6 +2022,13 @@ export const QuizGame: React.FC<QuizGameProps> = ({ onClose }) => {
               </div>
 
               <div className="space-y-2">
+                <button 
+                  onClick={handleContinueGame}
+                  style={{ backgroundColor: theme.primaryColor }}
+                  className="w-full py-3 rounded-xl text-white font-bold hover:brightness-110 transition-all cursor-pointer text-xs sm:text-sm active:scale-95 shadow-md flex items-center justify-center gap-2"
+                >
+                  <span>ادامه بازی و ست‌های بیشتر (بدون ریست امتیازها) 🔥</span>
+                </button>
                 <button 
                   onClick={resetGame}
                   className="w-full py-3 rounded-xl bg-white text-black font-bold hover:bg-neutral-200 transition-all cursor-pointer text-xs sm:text-sm active:scale-95"

@@ -84,9 +84,8 @@ export const HugExperienceModal: React.FC<HugExperienceModalProps> = ({
     }
   }, []);
 
-  // Web Audio Synth for gentle, deep, relaxing warm Lub-Dub heartbeat sound
+  // Web Audio Synth for gentle, deep, relaxing warm Lub-Dub heartbeat sound & physical rumble
   const playHeartSound = useCallback((phaseName: 'lub' | 'dub') => {
-    if (!soundEnabled) return;
     try {
       if (!synthAudioCtxRef.current) {
         const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -97,73 +96,78 @@ export const HugExperienceModal: React.FC<HugExperienceModalProps> = ({
         ctx.resume();
       }
 
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const filter = ctx.createBiquadFilter();
+      // 1. Tactile Sub-bass Physical Rumble for speaker/casing vibration
+      const subOsc = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(phaseName === 'lub' ? 36 : 44, ctx.currentTime);
+      subOsc.frequency.exponentialRampToValueAtTime(18, ctx.currentTime + 0.14);
+      subGain.gain.setValueAtTime(0.01, ctx.currentTime);
+      subGain.gain.linearRampToValueAtTime(0.75, ctx.currentTime + 0.025);
+      subGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14);
+      subOsc.connect(subGain);
+      subGain.connect(ctx.destination);
+      subOsc.start();
+      subOsc.stop(ctx.currentTime + 0.14);
 
-      // Warm low-pass filter for smooth, organic, non-harsh sound
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(phaseName === 'lub' ? 80 : 105, ctx.currentTime);
+      // 2. Audible acoustic heartbeat sound if sound is enabled
+      if (soundEnabled) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
 
-      const freq = phaseName === 'lub' ? 48 : 62;
-      const soundDuration = phaseName === 'lub' ? 0.08 : 0.06;
-      const volume = phaseName === 'lub' ? 0.32 : 0.22;
+        // Warm low-pass filter for smooth, organic, non-harsh sound
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(phaseName === 'lub' ? 85 : 110, ctx.currentTime);
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(28, ctx.currentTime + soundDuration);
+        const freq = phaseName === 'lub' ? 50 : 64;
+        const soundDuration = phaseName === 'lub' ? 0.09 : 0.07;
+        const volume = phaseName === 'lub' ? 0.35 : 0.25;
 
-      gain.gain.setValueAtTime(0.005, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + soundDuration);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(28, ctx.currentTime + soundDuration);
 
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.005, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + soundDuration);
 
-      osc.start();
-      osc.stop(ctx.currentTime + soundDuration);
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + soundDuration);
+      }
     } catch {
       // Audio fallback
     }
   }, [soundEnabled]);
 
-  // Trigger biological Lub-Dub vibration & pulse with gentle, calm, warm cuddle feel
-  const triggerBiologicalHeartbeat = useCallback(() => {
-    // 1. First soft beat (Lub) - gentle pulse
-    playHeartSound('lub');
-    if ('vibrate' in navigator) {
+  // Native atomic vibration trigger
+  const triggerNativeVibration = useCallback(() => {
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
       try {
-        if (vibrationIntensity === 'gentle') {
-          navigator.vibrate(36); // very gentle 36ms pulse
-        } else if (vibrationIntensity === 'soft_deep') {
-          navigator.vibrate(48); // slightly deeper single pulse
-        } else {
-          navigator.vibrate(28); // super soft whisper pulse
-        }
-      } catch {
-        // Ignored
+        // Dual-pulse heartbeat pattern: 50ms Lub, 80ms pause, 60ms Dub
+        navigator.vibrate([50, 80, 60]);
+      } catch (err) {
+        console.log('Hug vibration note:', err);
       }
     }
+  }, []);
 
-    // 2. Second beat (Dub) 125ms later - Soft echo
+  // Trigger biological Lub-Dub vibration & pulse with gentle, calm, warm cuddle feel
+  const triggerBiologicalHeartbeat = useCallback(() => {
+    triggerNativeVibration();
+
+    // 1. First soft beat (Lub)
+    playHeartSound('lub');
+
+    // 2. Second beat (Dub) 130ms later
     setTimeout(() => {
       playHeartSound('dub');
-      if ('vibrate' in navigator) {
-        try {
-          if (vibrationIntensity === 'gentle') {
-            navigator.vibrate(42); // 42ms soft pulse
-          } else if (vibrationIntensity === 'soft_deep') {
-            navigator.vibrate(52);
-          } else {
-            navigator.vibrate(32);
-          }
-        } catch {
-          // Ignored
-        }
-      }
-    }, 125);
-  }, [playHeartSound, vibrationIntensity]);
+    }, 130);
+  }, [playHeartSound, triggerNativeVibration]);
 
   // Start continuous calm, steady vibration loop (~70-74 BPM: relaxing pulse every ~840ms)
   const startVibrationLoop = useCallback(() => {
@@ -424,9 +428,15 @@ export const HugExperienceModal: React.FC<HugExperienceModalProps> = ({
             <button
               id="hug-touch-trigger-btn"
               onClick={isPlaying ? handleStopExperience : handleStartExperience}
-              onTouchStart={() => setTouchHolding(true)}
+              onTouchStart={() => {
+                triggerNativeVibration();
+                setTouchHolding(true);
+              }}
               onTouchEnd={() => setTouchHolding(false)}
-              onMouseDown={() => setTouchHolding(true)}
+              onMouseDown={() => {
+                triggerNativeVibration();
+                setTouchHolding(true);
+              }}
               onMouseUp={() => setTouchHolding(false)}
               onMouseLeave={() => setTouchHolding(false)}
               style={{
@@ -453,6 +463,16 @@ export const HugExperienceModal: React.FC<HugExperienceModalProps> = ({
                   ? (phase === 'voice_intro' ? 'در حال پخش صدای حسن...' : '💓 تپش آرام سینه...')
                   : 'شروع بغل و تپش'}
               </span>
+            </button>
+
+            {/* Direct Instant Vibration Test Button */}
+            <button
+              type="button"
+              onClick={triggerBiologicalHeartbeat}
+              className="mt-3 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-[11px] text-rose-300 font-medium transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+            >
+              <Smartphone className="w-3 h-3 text-rose-400 animate-bounce" />
+              <span>تست لرزش و تپش (ضربه بزنید)</span>
             </button>
 
             {/* Live Subtitle & Transcript Display */}

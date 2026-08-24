@@ -3,19 +3,28 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Palette, Check, Sparkles } from 'lucide-react';
 import { useTheme, THEMES, ThemeMode } from '../context/ThemeContext';
 
-export const ThemeSelector: React.FC = () => {
+interface ThemeSelectorProps {
+  compact?: boolean;
+  className?: string;
+}
+
+export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false, className = '' }) => {
   const { theme, themeMode, setThemeMode } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
 
   const themeOptions: ThemeMode[] = ['rose', 'sapphire', 'amethyst'];
 
   return (
-    <div className="relative">
+    <div className={`relative ${className}`}>
       {/* Trigger Button */}
       <button
         id="theme-selector-btn"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3.5 py-2 sm:py-2.5 rounded-2xl border text-xs transition-all duration-300 backdrop-blur-md cursor-pointer shadow-lg active:scale-90"
+        className={`flex items-center gap-1.5 transition-all duration-300 backdrop-blur-md cursor-pointer shadow-lg active:scale-90 ${
+          compact
+            ? 'px-2.5 py-1.5 rounded-xl border text-xs'
+            : 'px-3.5 py-2 sm:py-2.5 rounded-2xl border text-xs'
+        }`}
         style={{
           backgroundColor: 'rgba(255, 255, 255, 0.1)',
           borderColor: 'rgba(255, 255, 255, 0.2)',
@@ -23,8 +32,9 @@ export const ThemeSelector: React.FC = () => {
         }}
         title="تغییر تم و رنگ‌بندی سایت"
       >
-        <Palette className="w-4 h-4" style={{ color: theme.primaryColor }} />
-        <span className="text-[11px] font-bold tracking-tight">تم: {theme.name}</span>
+        <Palette className="w-3.5 h-3.5" style={{ color: theme.primaryColor }} />
+        {!compact && <span className="text-[11px] font-bold tracking-tight">تم: {theme.name}</span>}
+        {compact && <span className="text-[10px] font-bold">{theme.name.split(' ')[0]}</span>}
       </button>
 
       {/* Dropdown Menu */}

@@ -469,11 +469,11 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, onOpenSky }) => {
             id="open-heartbeat-modal-btn"
             type="button"
             onClick={() => setIsHeartbeatModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:text-white hover:bg-rose-500/20 transition-all cursor-pointer group"
-            title="لمس و احساس ویبره واقعی تپش قلب"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-200 hover:text-white hover:bg-rose-500/25 transition-all cursor-pointer group shadow-sm"
+            title="لمس تپش قلب زنده آنلاین و پیام‌رسان دو‌نفره اختصاصی"
           >
             <Activity className="w-3.5 h-3.5 text-rose-400 group-hover:animate-pulse flex-shrink-0" />
-            <span className="font-medium">~{toPersianDigits(duration.heartbeats.toLocaleString())} ضربان قلب مشترک (لمس تپش 💓)</span>
+            <span className="font-semibold">تپش قلب زنده آنلاین و چت دو‌نفره 💓💬</span>
           </button>
           
           <div className="flex items-center gap-1.5 px-3 py-1.5">
@@ -532,6 +532,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, onOpenSky }) => {
         onOpenDailyMessage={() => setIsDailyMessageOpen(true)}
         onOpenQuiz={() => setIsQuizOpen(true)}
         onOpenSky={() => onOpenSky?.()}
+        onOpenHeartbeat={() => setIsHeartbeatModalOpen(true)}
       />
 
       {/* Daily Message from Hasan to Niosha Modal */}

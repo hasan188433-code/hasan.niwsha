@@ -79,3 +79,46 @@ export interface QuizRoom {
   resetRequestedBy?: 'حسن' | 'نیوشا' | null; // Player who requested a full match restart
   lastUpdate: number;
 }
+
+export type CoupleUser = 'حسن' | 'نیوشا';
+
+export interface HeartbeatMediaAttachment {
+  type: 'image' | 'audio' | 'voice' | 'video' | 'file';
+  url: string; // Base64 data URL or direct URL
+  name?: string;
+  size?: number; // In bytes
+  duration?: number; // In seconds (for audio / voice)
+  mimeType?: string;
+}
+
+export interface CoupleChatMessage {
+  id: string;
+  sender: CoupleUser;
+  text?: string;
+  attachment?: HeartbeatMediaAttachment;
+  createdAt: number;
+  reactions?: { [key: string]: string }; // e.g. {'حسن': '❤️', 'نیوشا': '😍'}
+  replyTo?: {
+    id: string;
+    sender: CoupleUser;
+    text?: string;
+    attachmentType?: string;
+  };
+}
+
+export interface HeartbeatSyncData {
+  id?: string;
+  lastPing?: { [key: string]: number }; // Presence timestamp for each user
+  touchState?: { [key: string]: boolean }; // User actively holding/touching heart
+  lastBeatPulse?: {
+    pulseId?: string;
+    sender: CoupleUser;
+    type: 'single' | 'holding' | 'pulse_burst' | 'reaction';
+    reactionType?: 'kiss' | 'hug' | 'flame' | 'sparkle' | 'heart';
+    timestamp: number;
+    intensity?: number;
+  };
+  syncedMode?: boolean; // Both devices beating at identical synced rhythm
+  syncedBpm?: number;
+  lastUpdate?: number;
+}

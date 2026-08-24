@@ -97,6 +97,18 @@
         "createdAt": { "type": "number" }
       },
       "required": ["id", "author", "content", "date"]
+    },
+    "DailyMessage": {
+      "title": "Daily Message",
+      "description": "A daily persistent love letter message from Hasan to Niosha",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "dateKey": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "history": { "type": "array" }
+      },
+      "required": ["text", "dateKey", "updatedAt"]
     }
   },
   "firestore": {

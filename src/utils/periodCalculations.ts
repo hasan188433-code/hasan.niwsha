@@ -1,6 +1,60 @@
 import { CyclePhase, CyclePhaseInfo } from '../types/period';
 import { toPersianDigits } from './dateCalculations';
 
+export interface AnalgesicGuideItem {
+  name: string;
+  genericName: string;
+  category: string;
+  mechanism: string;
+  dosage: string;
+  timing: string;
+  warnings: string;
+  rating: number; // 1-5 effectiveness for dysmenorrhea
+}
+
+export const CLINICAL_ANALGESICS: AnalgesicGuideItem[] = [
+  {
+    name: 'مفنامیک اسید (Ponstan / Mefenamic Acid)',
+    genericName: 'Mefenamic Acid (NSAID)',
+    category: 'خط اول درمان دردهای شدید قاعدگی (دیسمنوره)',
+    mechanism: 'مهار مستقیم آنزیم سیکلواکسیژناز (COX) و مسدود کردن گیرنده‌های پروستاگلاندین PGF2α در عضله میومتر رحم که عامل اصلی انقباض و درد است.',
+    dosage: '۲۵۰ تا ۵۰۰ میلی‌گرم هر ۶ الی ۸ ساعت (حداکثر ۱۵۰۰ میلی‌گرم در روز)',
+    timing: 'بهترین اثربخشی: مصرف در اولین ساعات لکه‌بینی یا شروع دل‌درد، همراه با یک لیوان کامل آب و بعد از غذا.',
+    warnings: 'نباید با معده کاملاً خالی مصرف شود. در صورت سابقه زخم معده با احتیاط مصرف گردد.',
+    rating: 5,
+  },
+  {
+    name: 'ناپروکسن (Naproxen / Aleve)',
+    genericName: 'Naproxen Sodium (NSAID)',
+    category: 'مسکن طولانی‌اثر و ضدالتهاب قوی',
+    mechanism: 'مهار طولانی‌مدت سنتز پروستاگلاندین‌ها با اثر ماندگار ۸ تا ۱۲ ساعته که نیاز به تکرار مداوم دوز را کم می‌کند.',
+    dosage: '۲۷۵ تا ۵۰۰ میلی‌گرم هر ۸ الی ۱۲ ساعت',
+    timing: 'شروع با ۲۷۵ تا ۵۵۰ میلی‌گرم در ابتدای علائم، سپس ۲۷۵ میلی‌گرم هر ۸ ساعت در صورت تداوم درد.',
+    warnings: 'همراه با غذا و مایعات فراوان مصرف شود. برای دردهای شبانه و خواب راحت بسیار عالی است.',
+    rating: 5,
+  },
+  {
+    name: 'ایبوپروفن / ژلوفن (Ibuprofen / Gelofen)',
+    genericName: 'Ibuprofen (Softgel)',
+    category: 'مسکن سریع‌الجذب برای دردهای حاد و گرفتگی عضلانی',
+    mechanism: 'کاهش سریع واسطه‌های التهابی و گشادکننده عروق رحمی منقبض‌شده جهت بهبود جریان خون بافت.',
+    dosage: '۴۰۰ میلی‌گرم هر ۶ ساعت در صورت نیاز (حداکثر ۱۲۰۰ میلی‌گرم روزانه بدون نسخه)',
+    timing: 'کپسول‌های ژلاتینی ژلوفن جذب سریع‌تری دارند و ظرف ۲۰ تا ۳۰ دقیقه اثر تسکینی خود را نشان می‌دهند.',
+    warnings: 'از مصرف هم‌زمان با سایر داروهای هم‌خانواده NSAID خودداری شود.',
+    rating: 4,
+  },
+  {
+    name: 'استامینوفن کدئین / پاراستامول (Acetaminophen)',
+    genericName: 'Acetaminophen + Codeine',
+    category: 'مسکن مرکزی برای سردرد، دردهای اسکلتی و حساسیت معده',
+    mechanism: 'اثر بر سیستم عصبی مرکزی جهت افزایش آستانه تحمل درد. فاقد عوارض گوارشی شایع NSAIDها.',
+    dosage: '۱ قرص هر ۶ ساعت در صورت نیاز',
+    timing: 'مناسب برای افرادی که معده حساسی دارند یا هم‌زمان دچار سردردهای تنشی ماهانه شده‌اند.',
+    warnings: 'برای التهاب رحمی اثربخشی کمتری از مفنامیک اسید دارد؛ در مصرف کدئین نباید زیاده‌روی شود.',
+    rating: 3,
+  },
+];
+
 export interface CycleCalculations {
   currentDayInCycle: number;
   currentPhase: CyclePhase;

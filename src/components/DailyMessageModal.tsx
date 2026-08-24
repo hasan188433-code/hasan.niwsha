@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Heart, X, Send, Calendar, Check, Lock, Unlock, History, ArrowRight, RefreshCw, PenLine } from 'lucide-react';
 import { DailyMessage } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { subscribeDailyMessage, saveDailyMessageRealtime } from '../services/realtimeSync';
 
 interface DailyMessageModalProps {
   isOpen: boolean;
@@ -28,34 +29,25 @@ export const DailyMessageModal: React.FC<DailyMessageModalProps> = ({
   const [passcode, setPasscode] = useState('');
   const [passError, setPassError] = useState(false);
 
-  const fetchDailyMessage = () => {
-    setIsLoading(true);
-    fetch('/api/daily-message')
-      .then((res) => {
-        if (!res.ok) throw new Error('Network response was not ok');
-        return res.json();
-      })
-      .then((data: DailyMessage) => {
-        setMessageData(data);
-        if (data.text) {
-          setEditText(data.text);
-        }
-      })
-      .catch((err) => {
-        console.error('Error loading daily message:', err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  };
-
   useEffect(() => {
-    if (isOpen) {
-      fetchDailyMessage();
-      setIsEditing(false);
-      setShowHistory(false);
-      setSaveSuccess(false);
-    }
+    if (!isOpen) return;
+
+    setIsLoading(true);
+    const unsubscribe = subscribeDailyMessage((data) => {
+      setMessageData(data);
+      if (data && data.text) {
+        setEditText(data.text);
+      }
+      setIsLoading(false);
+    });
+
+    setIsEditing(false);
+    setShowHistory(false);
+    setSaveSuccess(false);
+
+    return () => {
+      unsubscribe();
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -108,14 +100,9 @@ export const DailyMessageModal: React.FC<DailyMessageModalProps> = ({
 
     setIsSaving(true);
     try {
-      const res = await fetch('/api/daily-message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: editText.trim() }),
-      });
-      const data = await res.json();
-      if (data.success && data.dailyMessage) {
-        setMessageData(data.dailyMessage);
+      const updatedData = await saveDailyMessageRealtime(editText.trim());
+      if (updatedData) {
+        setMessageData(updatedData);
         setSaveSuccess(true);
         setIsEditing(false);
         setTimeout(() => setSaveSuccess(false), 3500);

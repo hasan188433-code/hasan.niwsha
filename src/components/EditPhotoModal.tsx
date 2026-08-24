@@ -186,7 +186,7 @@ export const EditPhotoModal: React.FC<EditPhotoModalProps> = ({
             </label>
             <div className="flex flex-col gap-2">
               <input
-                type="url"
+                type="text"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 placeholder="https://..."

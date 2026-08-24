@@ -65,39 +65,45 @@ function AppContent() {
   };
 
   // Add new photo memory in real-time
-  const handleAddPhoto = (newPhotoData: Omit<MemoryPhoto, 'id'>) => {
-    addMemoryRealtime(newPhotoData);
+  const handleAddPhoto = async (newPhotoData: Omit<MemoryPhoto, 'id'>) => {
+    const updated = await addMemoryRealtime(newPhotoData);
+    if (updated) setMemories(updated);
   };
 
   // Update photo memory in real-time
-  const handleUpdatePhoto = (id: string, data: Partial<Omit<MemoryPhoto, 'id'>>) => {
-    updateMemoryRealtime(id, data);
+  const handleUpdatePhoto = async (id: string, data: Partial<Omit<MemoryPhoto, 'id'>>) => {
+    const updated = await updateMemoryRealtime(id, data);
+    if (updated) setMemories(updated);
     if (selectedPhoto && selectedPhoto.id === id) {
       setSelectedPhoto((prev) => (prev ? { ...prev, ...data } : null));
     }
   };
 
   // Delete photo memory in real-time
-  const handleDeletePhoto = (id: string) => {
-    deleteMemoryRealtime(id);
+  const handleDeletePhoto = async (id: string) => {
+    const updated = await deleteMemoryRealtime(id);
+    if (updated) setMemories(updated);
     if (selectedPhoto && selectedPhoto.id === id) {
       setSelectedPhoto(null);
     }
   };
 
   // Add diary entry in real-time
-  const handleAddDiaryEntry = (author: string, content: string, date: string) => {
-    addDiaryEntryRealtime(author, content, date);
+  const handleAddDiaryEntry = async (author: string, content: string, date: string) => {
+    const updated = await addDiaryEntryRealtime(author, content, date);
+    if (updated) setDiaryEntries(updated);
   };
 
   // Delete diary entry in real-time
-  const handleDeleteDiaryEntry = (id: string) => {
-    deleteDiaryEntryRealtime(id);
+  const handleDeleteDiaryEntry = async (id: string) => {
+    const updated = await deleteDiaryEntryRealtime(id);
+    if (updated) setDiaryEntries(updated);
   };
 
   // Update diary entry in real-time
-  const handleUpdateDiaryEntry = (id: string, newContent: string) => {
-    updateDiaryEntryRealtime(id, newContent);
+  const handleUpdateDiaryEntry = async (id: string, newContent: string) => {
+    const updated = await updateDiaryEntryRealtime(id, newContent);
+    if (updated) setDiaryEntries(updated);
   };
 
   return (

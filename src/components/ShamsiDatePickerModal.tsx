@@ -12,6 +12,7 @@ import {
   formatJalaliToString,
 } from '../utils/jalali';
 import { toPersianDigits } from '../utils/dateCalculations';
+import { useTheme } from '../context/ThemeContext';
 
 interface ShamsiDatePickerModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
   onSelectDate,
   title = 'انتخاب تاریخ شروع پریود در تقویم شمسی',
 }) => {
+  const { theme } = useTheme();
+
   // Parse initial date
   const initialDate = selectedDateStr ? new Date(selectedDateStr) : new Date();
   const initialJalali = gregorianToJalali(
@@ -109,20 +112,30 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-[#160613] border border-rose-600/50 rounded-3xl p-4 sm:p-6 shadow-2xl text-white relative overflow-hidden"
+        style={{
+          backgroundColor: theme.cardBg,
+          borderColor: theme.cardBorder,
+        }}
+        className="w-full max-w-md border rounded-3xl p-4 sm:p-6 shadow-2xl text-white relative overflow-hidden"
       >
         {/* Header Ambient Glow */}
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-48 h-48 bg-rose-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div
+          className="absolute -top-10 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-25"
+          style={{ backgroundColor: theme.primaryColor }}
+        />
 
         {/* Top Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-rose-900/40 relative z-10">
+        <div className="flex items-center justify-between pb-3 border-b border-white/10 relative z-10">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-rose-600 to-pink-600 shadow-md">
+            <div
+              className="p-2 rounded-xl shadow-md flex items-center justify-center text-white"
+              style={{ backgroundColor: theme.primaryColor }}
+            >
               <CalendarIcon className="w-4 h-4 text-white" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">{title}</h3>
-              <p className="text-[11px] text-rose-300">لمس مستقیم روز شروع در تقویم خورشیدی</p>
+              <p className="text-[11px] text-neutral-400">لمس مستقیم روز شروع در تقویم خورشیدی</p>
             </div>
           </div>
           <button
@@ -138,35 +151,40 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
           <span className="text-[11px] text-neutral-400 shrink-0">دسترسی سریع:</span>
           <button
             onClick={() => handleQuickSelectDaysAgo(0)}
-            className="px-2.5 py-1 rounded-full bg-rose-950/60 hover:bg-rose-900 border border-rose-700/40 text-rose-200 hover:text-white text-[11px] transition-all shrink-0 cursor-pointer"
+            style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+            className="px-2.5 py-1 rounded-full hover:brightness-125 border text-[11px] transition-all shrink-0 cursor-pointer text-neutral-200 hover:text-white"
           >
             امروز ({toPersianDigits(todayJalali.jd)} {PERSIAN_MONTHS[todayJalali.jm - 1]})
           </button>
           <button
             onClick={() => handleQuickSelectDaysAgo(1)}
-            className="px-2.5 py-1 rounded-full bg-rose-950/60 hover:bg-rose-900 border border-rose-700/40 text-rose-200 hover:text-white text-[11px] transition-all shrink-0 cursor-pointer"
+            style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+            className="px-2.5 py-1 rounded-full hover:brightness-125 border text-[11px] transition-all shrink-0 cursor-pointer text-neutral-200 hover:text-white"
           >
             دیروز
           </button>
           <button
             onClick={() => handleQuickSelectDaysAgo(2)}
-            className="px-2.5 py-1 rounded-full bg-rose-950/60 hover:bg-rose-900 border border-rose-700/40 text-rose-200 hover:text-white text-[11px] transition-all shrink-0 cursor-pointer"
+            style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+            className="px-2.5 py-1 rounded-full hover:brightness-125 border text-[11px] transition-all shrink-0 cursor-pointer text-neutral-200 hover:text-white"
           >
             ۲ روز پیش
           </button>
           <button
             onClick={() => handleQuickSelectDaysAgo(4)}
-            className="px-2.5 py-1 rounded-full bg-rose-950/60 hover:bg-rose-900 border border-rose-700/40 text-rose-200 hover:text-white text-[11px] transition-all shrink-0 cursor-pointer"
+            style={{ backgroundColor: theme.pillBg, borderColor: theme.pillBorder }}
+            className="px-2.5 py-1 rounded-full hover:brightness-125 border text-[11px] transition-all shrink-0 cursor-pointer text-neutral-200 hover:text-white"
           >
             ۴ روز پیش
           </button>
         </div>
 
         {/* Month & Year Navigation Header */}
-        <div className="mt-4 flex items-center justify-between bg-black/40 border border-rose-900/40 rounded-2xl px-3 py-2">
+        <div className="mt-4 flex items-center justify-between bg-black/40 border border-white/10 rounded-2xl px-3 py-2">
           <button
             onClick={handlePrevMonth}
-            className="p-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900 text-rose-200 hover:text-white transition-all cursor-pointer flex items-center gap-1 text-xs"
+            style={{ backgroundColor: theme.pillBg }}
+            className="p-1.5 rounded-lg text-neutral-200 hover:text-white transition-all cursor-pointer flex items-center gap-1 text-xs"
             title="ماه قبل"
           >
             <ChevronRight className="w-4 h-4" />
@@ -176,13 +194,14 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
           <div className="text-center">
             <div className="text-sm font-bold text-white flex items-center justify-center gap-1.5">
               <span>{PERSIAN_MONTHS[viewMonth - 1]}</span>
-              <span className="text-rose-300 font-bold">{toPersianDigits(viewYear)}</span>
+              <span className="font-bold" style={{ color: theme.accentColor }}>{toPersianDigits(viewYear)}</span>
             </div>
           </div>
 
           <button
             onClick={handleNextMonth}
-            className="p-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900 text-rose-200 hover:text-white transition-all cursor-pointer flex items-center gap-1 text-xs"
+            style={{ backgroundColor: theme.pillBg }}
+            className="p-1.5 rounded-lg text-neutral-200 hover:text-white transition-all cursor-pointer flex items-center gap-1 text-xs"
             title="ماه بعد"
           >
             <span className="text-[11px] hidden sm:inline">ماه بعد</span>
@@ -191,9 +210,9 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
         </div>
 
         {/* Week Days Header */}
-        <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-rose-300/80 py-1 border-b border-rose-900/30">
+        <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-neutral-400 py-1 border-b border-white/10">
           {PERSIAN_WEEK_DAYS.map((wd, i) => (
-            <div key={i} className={`py-0.5 ${i === 6 ? 'text-pink-400 font-bold' : ''}`}>
+            <div key={i} className={`py-0.5 ${i === 6 ? 'font-bold' : ''}`} style={i === 6 ? { color: theme.accentColor } : {}}>
               {wd}
             </div>
           ))}
@@ -221,17 +240,24 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
                 key={`day-${day}`}
                 type="button"
                 onClick={() => handleSelectDay(day)}
+                style={
+                  isSelected
+                    ? { backgroundColor: theme.primaryColor, borderColor: theme.accentColor }
+                    : isToday
+                    ? { backgroundColor: theme.pillBg, borderColor: theme.primaryColor }
+                    : {}
+                }
                 className={`h-9 sm:h-10 rounded-xl text-xs sm:text-sm font-bold transition-all flex flex-col items-center justify-center relative cursor-pointer ${
                   isSelected
-                    ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-lg scale-105 ring-2 ring-pink-400'
+                    ? 'text-white shadow-lg scale-105 ring-2 ring-white/40'
                     : isToday
-                    ? 'bg-rose-950/80 text-rose-200 border border-rose-500 hover:bg-rose-900'
-                    : 'bg-white/5 hover:bg-rose-950/60 text-neutral-200 hover:text-white border border-transparent hover:border-rose-800/40'
+                    ? 'text-white border'
+                    : 'bg-white/5 hover:bg-white/10 text-neutral-200 hover:text-white border border-transparent'
                 }`}
               >
                 <span>{toPersianDigits(day)}</span>
                 {isToday && (
-                  <span className="text-[8px] -mt-1 text-pink-300 font-normal">امروز</span>
+                  <span className="text-[8px] -mt-1 font-normal opacity-90">امروز</span>
                 )}
               </button>
             );
@@ -239,10 +265,10 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
         </div>
 
         {/* Selected Date Summary & Confirm Action */}
-        <div className="mt-4 pt-3 border-t border-rose-900/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="mt-4 pt-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-right w-full sm:w-auto">
             <div className="text-[10px] text-neutral-400">تاریخ انتخاب شده:</div>
-            <div className="text-xs font-bold text-rose-200 flex items-center gap-1.5">
+            <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: theme.accentColor }}>
               <span>🌸</span>
               <span>
                 {toPersianDigits(tempSelected.jd)} {PERSIAN_MONTHS[tempSelected.jm - 1]} {toPersianDigits(tempSelected.jy)}
@@ -259,7 +285,8 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
             </button>
             <button
               onClick={handleConfirm}
-              className="flex-1 sm:flex-none px-5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+              style={{ backgroundColor: theme.primaryColor }}
+              className="flex-1 sm:flex-none px-5 py-2 rounded-xl hover:brightness-110 text-white text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
             >
               <Check className="w-4 h-4" />
               <span>تأیید و ذخیره تاریخ</span>

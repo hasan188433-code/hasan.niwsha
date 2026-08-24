@@ -212,54 +212,90 @@ export const saveSiteLogoRealtime = async (logoData: Partial<SiteLogoData>) => {
 };
 
 // -------------------------------------------------------------
-// 4. PHOTO GALLERY / MEMORIES REAL-TIME SYNC (Host API ONLY)
+// 4. PHOTO GALLERY / MEMORIES REAL-TIME SYNC (Firestore Persistent Cloud Backed)
 // -------------------------------------------------------------
 export const subscribeMemories = (
   onUpdate: (memories: MemoryPhoto[]) => void
 ): (() => void) => {
-  let lastMemoriesJson = '';
+  const memoriesDocRef = doc(db, 'site_data', 'memories');
+  let isInitial = true;
 
-  const safeUpdate = (list: MemoryPhoto[]) => {
-    try {
-      const serialized = JSON.stringify(list);
-      if (serialized !== lastMemoriesJson) {
-        lastMemoriesJson = serialized;
-        onUpdate(list);
-      }
-    } catch {
-      onUpdate(list);
-    }
-  };
-
-  // Direct fetch from server host
-  const fetchHostMemories = async () => {
-    try {
-      const res = await fetch('/api/memories');
-      if (res.ok) {
-        const serverList = await res.json();
-        if (Array.isArray(serverList)) {
-          safeUpdate(serverList);
+  const unsubscribe = onSnapshot(
+    memoriesDocRef,
+    async (snapshot) => {
+      if (snapshot.exists() && Array.isArray(snapshot.data()?.items)) {
+        const items = snapshot.data().items as MemoryPhoto[];
+        if (items.length > 0) {
+          onUpdate(items);
+          return;
         }
       }
-    } catch (e) {
-      console.warn('Host memories fetch error:', e);
+
+      // If document does not exist or has empty items, seed with baseline/server data
+      if (isInitial) {
+        isInitial = false;
+        try {
+          const res = await fetch('/api/memories');
+          let initialList: MemoryPhoto[] = INITIAL_MEMORIES;
+          if (res.ok) {
+            const serverList = await res.json();
+            if (Array.isArray(serverList) && serverList.length > 0) {
+              initialList = serverList;
+            }
+          }
+          await setDoc(memoriesDocRef, { items: initialList, lastUpdated: Date.now() }, { merge: true });
+          onUpdate(initialList);
+        } catch (e) {
+          onUpdate(INITIAL_MEMORIES);
+        }
+      }
+    },
+    (error) => {
+      console.warn('Firestore memories snapshot listener error:', error);
+      fetch('/api/memories')
+        .then((r) => r.json())
+        .then((list) => {
+          if (Array.isArray(list)) onUpdate(list);
+        })
+        .catch(() => onUpdate(INITIAL_MEMORIES));
     }
-  };
+  );
 
-  fetchHostMemories();
-
-  // Periodic Host sync polling (every 3 seconds) to guarantee sync across all mobile devices/browsers
-  const pollInterval = window.setInterval(() => {
-    fetchHostMemories();
-  }, 3000);
-
-  return () => {
-    clearInterval(pollInterval);
-  };
+  return unsubscribe;
 };
 
 export const addMemoryRealtime = async (newPhoto: Omit<MemoryPhoto, 'id'>) => {
   try {
+    const memoriesDocRef = doc(db, 'site_data', 'memories');
+    const snap = await getDoc(memoriesDocRef);
+    let current: MemoryPhoto[] = [];
+    if (snap.exists() && Array.isArray(snap.data()?.items)) {
+      current = snap.data().items;
+    } else {
+      current = [...INITIAL_MEMORIES];
+    }
+
+    const newItem: MemoryPhoto = {
+      id: `mem-${Date.now()}`,
+      title: newPhoto.title || '',
+      description: newPhoto.description || '',
+      imageUrl: newPhoto.imageUrl || '',
+      date: newPhoto.date || '',
+    };
+
+    const updated = [...current, newItem];
+    await setDoc(memoriesDocRef, { items: updated, lastUpdated: Date.now() }, { merge: true });
+
+    // Also sync to server API for redundancy
+    fetch('/api/memories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newPhoto),
+    }).catch(() => {});
+
+    return updated;
+  } catch (e) {
+    console.error('Firestore memories save error:', e);
     const res = await fetch('/api/memories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -267,17 +303,40 @@ export const addMemoryRealtime = async (newPhoto: Omit<MemoryPhoto, 'id'>) => {
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.memories)) {
-        return data.memories;
-      }
+      return data.memories;
     }
-  } catch (e) {
-    console.error('Host memories save error:', e);
   }
 };
 
 export const updateMemoryRealtime = async (id: string, partial: Partial<Omit<MemoryPhoto, 'id'>>) => {
   try {
+    const memoriesDocRef = doc(db, 'site_data', 'memories');
+    const snap = await getDoc(memoriesDocRef);
+    let current: MemoryPhoto[] = [];
+    if (snap.exists() && Array.isArray(snap.data()?.items)) {
+      current = snap.data().items;
+    } else {
+      current = [...INITIAL_MEMORIES];
+    }
+
+    const updated = current.map((item) => {
+      if (item.id === id) {
+        return { ...item, ...partial };
+      }
+      return item;
+    });
+
+    await setDoc(memoriesDocRef, { items: updated, lastUpdated: Date.now() }, { merge: true });
+
+    fetch('/api/memories/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...partial }),
+    }).catch(() => {});
+
+    return updated;
+  } catch (e) {
+    console.error('Firestore memories update error:', e);
     const res = await fetch('/api/memories/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -285,80 +344,126 @@ export const updateMemoryRealtime = async (id: string, partial: Partial<Omit<Mem
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.memories)) {
-        return data.memories;
-      }
+      return data.memories;
     }
-  } catch (e) {
-    console.error('Host memories update error:', e);
   }
 };
 
 export const deleteMemoryRealtime = async (id: string) => {
   try {
+    const memoriesDocRef = doc(db, 'site_data', 'memories');
+    const snap = await getDoc(memoriesDocRef);
+    let current: MemoryPhoto[] = [];
+    if (snap.exists() && Array.isArray(snap.data()?.items)) {
+      current = snap.data().items;
+    } else {
+      current = [...INITIAL_MEMORIES];
+    }
+
+    const updated = current.filter((item) => item.id !== id);
+    await setDoc(memoriesDocRef, { items: updated, lastUpdated: Date.now() }, { merge: true });
+
+    fetch(`/api/memories/${id}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+
+    return updated;
+  } catch (e) {
+    console.error('Firestore memories delete error:', e);
     const res = await fetch(`/api/memories/${id}`, {
       method: 'DELETE',
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.memories)) {
-        return data.memories;
-      }
+      return data.memories;
     }
-  } catch (e) {
-    console.error('Host memories delete error:', e);
   }
 };
 
 // -------------------------------------------------------------
-// 5. DIARY ENTRIES REAL-TIME SYNC (Host API ONLY)
+// 5. DIARY ENTRIES REAL-TIME SYNC (Firestore Persistent Cloud Backed)
 // -------------------------------------------------------------
 export const subscribeDiary = (
   onUpdate: (diary: DiaryEntry[]) => void
 ): (() => void) => {
-  let lastDiaryJson = '';
+  const diaryDocRef = doc(db, 'site_data', 'diary');
+  let isInitial = true;
 
-  const safeUpdate = (list: DiaryEntry[]) => {
-    try {
-      const serialized = JSON.stringify(list);
-      if (serialized !== lastDiaryJson) {
-        lastDiaryJson = serialized;
-        onUpdate(list);
-      }
-    } catch {
-      onUpdate(list);
-    }
-  };
-
-  // Direct fetch from server host
-  const fetchHostDiary = async () => {
-    try {
-      const res = await fetch('/api/diary');
-      if (res.ok) {
-        const serverList = await res.json();
-        if (Array.isArray(serverList)) {
-          safeUpdate(serverList);
+  const unsubscribe = onSnapshot(
+    diaryDocRef,
+    async (snapshot) => {
+      if (snapshot.exists() && Array.isArray(snapshot.data()?.items)) {
+        const items = snapshot.data().items as DiaryEntry[];
+        if (items.length > 0) {
+          onUpdate(items);
+          return;
         }
       }
-    } catch (e) {
-      console.warn('Host diary fetch error:', e);
+
+      if (isInitial) {
+        isInitial = false;
+        try {
+          const res = await fetch('/api/diary');
+          let initialList: DiaryEntry[] = INITIAL_DIARY_ENTRIES;
+          if (res.ok) {
+            const serverList = await res.json();
+            if (Array.isArray(serverList) && serverList.length > 0) {
+              initialList = serverList;
+            }
+          }
+          await setDoc(diaryDocRef, { items: initialList, lastUpdated: Date.now() }, { merge: true });
+          onUpdate(initialList);
+        } catch (e) {
+          onUpdate(INITIAL_DIARY_ENTRIES);
+        }
+      }
+    },
+    (error) => {
+      console.warn('Firestore diary snapshot listener error:', error);
+      fetch('/api/diary')
+        .then((r) => r.json())
+        .then((list) => {
+          if (Array.isArray(list)) onUpdate(list);
+        })
+        .catch(() => onUpdate(INITIAL_DIARY_ENTRIES));
     }
-  };
+  );
 
-  fetchHostDiary();
-
-  // Periodic Host sync polling (every 3 seconds) so both devices sync instantly
-  const pollInterval = window.setInterval(() => {
-    fetchHostDiary();
-  }, 3000);
-
-  return () => {
-    clearInterval(pollInterval);
-  };
+  return unsubscribe;
 };
 
 export const addDiaryEntryRealtime = async (author: string, content: string, date: string) => {
   try {
+    const diaryDocRef = doc(db, 'site_data', 'diary');
+    const snap = await getDoc(diaryDocRef);
+    let current: DiaryEntry[] = [];
+    if (snap.exists() && Array.isArray(snap.data()?.items)) {
+      current = snap.data().items;
+    } else {
+      current = [...INITIAL_DIARY_ENTRIES];
+    }
+
+    const newEntry: DiaryEntry = {
+      id: `diary-${Date.now()}`,
+      author: author || 'حسن',
+      content: content || '',
+      date: date || '',
+      createdAt: Date.now(),
+    };
+
+    // Prepend new entry so latest is on top
+    const updated = [newEntry, ...current];
+    await setDoc(diaryDocRef, { items: updated, lastUpdated: Date.now() }, { merge: true });
+
+    fetch('/api/diary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author, content, date }),
+    }).catch(() => {});
+
+    return updated;
+  } catch (e) {
+    console.error('Firestore diary save error:', e);
     const res = await fetch('/api/diary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -366,17 +471,40 @@ export const addDiaryEntryRealtime = async (author: string, content: string, dat
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.diary)) {
-        return data.diary;
-      }
+      return data.diary;
     }
-  } catch (e) {
-    console.error('Host diary save error:', e);
   }
 };
 
 export const updateDiaryEntryRealtime = async (id: string, newContent: string) => {
   try {
+    const diaryDocRef = doc(db, 'site_data', 'diary');
+    const snap = await getDoc(diaryDocRef);
+    let current: DiaryEntry[] = [];
+    if (snap.exists() && Array.isArray(snap.data()?.items)) {
+      current = snap.data().items;
+    } else {
+      current = [...INITIAL_DIARY_ENTRIES];
+    }
+
+    const updated = current.map((entry) => {
+      if (entry.id === id) {
+        return { ...entry, content: newContent };
+      }
+      return entry;
+    });
+
+    await setDoc(diaryDocRef, { items: updated, lastUpdated: Date.now() }, { merge: true });
+
+    fetch('/api/diary/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, content: newContent }),
+    }).catch(() => {});
+
+    return updated;
+  } catch (e) {
+    console.error('Firestore diary update error:', e);
     const res = await fetch('/api/diary/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -384,28 +512,39 @@ export const updateDiaryEntryRealtime = async (id: string, newContent: string) =
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.diary)) {
-        return data.diary;
-      }
+      return data.diary;
     }
-  } catch (e) {
-    console.error('Host diary update error:', e);
   }
 };
 
 export const deleteDiaryEntryRealtime = async (id: string) => {
   try {
+    const diaryDocRef = doc(db, 'site_data', 'diary');
+    const snap = await getDoc(diaryDocRef);
+    let current: DiaryEntry[] = [];
+    if (snap.exists() && Array.isArray(snap.data()?.items)) {
+      current = snap.data().items;
+    } else {
+      current = [...INITIAL_DIARY_ENTRIES];
+    }
+
+    const updated = current.filter((entry) => entry.id !== id);
+    await setDoc(diaryDocRef, { items: updated, lastUpdated: Date.now() }, { merge: true });
+
+    fetch(`/api/diary/${id}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+
+    return updated;
+  } catch (e) {
+    console.error('Firestore diary delete error:', e);
     const res = await fetch(`/api/diary/${id}`, {
       method: 'DELETE',
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.diary)) {
-        return data.diary;
-      }
+      return data.diary;
     }
-  } catch (e) {
-    console.error('Host diary delete error:', e);
   }
 };
 

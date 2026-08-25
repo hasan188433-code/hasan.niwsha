@@ -30,6 +30,8 @@ import {
   Apple,
   FileText,
   Flame,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { CycleLog, CyclePhase } from '../types/period';
 import { calculateCycleStatus, PHASE_MEDICAL_DATA, CLINICAL_ANALGESICS } from '../utils/periodCalculations';
@@ -117,6 +119,43 @@ export const PeriodCareModal: React.FC<PeriodCareModalProps> = ({ isOpen, onClos
   const [syncedRecently, setSyncedRecently] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'status' | 'chat' | 'hasan_hub' | 'analgesic' | 'calendar' | 'nutrition' | 'symptoms' | 'coupons'>('status');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Native Fullscreen API to hide browser navigation bar (like immersive games)
+  const toggleNativeFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if ((document.documentElement as any).webkitRequestFullscreen) {
+          await (document.documentElement as any).webkitRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document.exitFullscreen as any).webkitExitFullscreen) {
+          await (document.exitFullscreen as any).webkitExitFullscreen();
+        }
+        setIsFullscreen(false);
+      }
+    } catch (err) {
+      console.warn('Fullscreen request:', err);
+      setIsFullscreen(!isFullscreen);
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [selectedFlow, setSelectedFlow] = useState<string>('medium');
   const [painLevel, setPainLevel] = useState<number>(2);
@@ -305,147 +344,168 @@ export const PeriodCareModal: React.FC<PeriodCareModalProps> = ({ isOpen, onClos
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto cursor-pointer font-vazir"
+      className={`fixed inset-0 z-50 flex items-center justify-center ${
+        isFullscreen ? 'p-0' : 'p-0 sm:p-3 md:p-6'
+      } bg-black/85 backdrop-blur-md overflow-hidden cursor-pointer font-vazir`}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
         onClick={(e) => e.stopPropagation()}
         style={{
           backgroundColor: theme.cardBg,
           borderColor: theme.cardBorder,
         }}
-        className="relative w-full max-w-2xl max-h-[92dvh] overflow-y-auto border rounded-3xl p-3.5 sm:p-5 shadow-2xl cursor-default my-auto text-white"
+        className={`relative w-full ${
+          isFullscreen
+            ? 'h-[100dvh] max-w-none max-h-none rounded-none border-none'
+            : 'h-[100dvh] sm:h-[92dvh] max-w-4xl rounded-none sm:rounded-3xl border'
+        } overflow-y-auto shadow-2xl cursor-default text-white flex flex-col`}
       >
-        {/* Modal Top Header */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
+        {/* Modal Top Sticky Header */}
+        <div className="sticky top-0 z-30 px-3.5 sm:px-6 py-3 border-b border-white/10 backdrop-blur-xl bg-black/40 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div
               style={{ backgroundColor: theme.primaryColor }}
-              className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg text-white"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center shadow-lg text-white shrink-0"
             >
-              <span className="text-xl">{userRole === 'hasan' ? '🛡️' : '🌸'}</span>
+              <span className="text-lg sm:text-xl">{userRole === 'hasan' ? '🛡️' : '🌸'}</span>
             </div>
-            <div className="text-right">
-              <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
-                <span>{userRole === 'hasan' ? 'پانل مراقبت، مدیریت و اختیارات حسن 👑' : 'کلینیک تخصصی و پایش سلامت نیوشا'}</span>
+            <div className="text-right min-w-0">
+              <h2 className="text-xs sm:text-sm md:text-base font-bold text-white flex items-center gap-1.5 truncate">
+                <span>{userRole === 'hasan' ? 'پانل مراقبت و اختیارات حسن 👑' : 'کلینیک تخصصی و پایش سلامت نیوشا'}</span>
               </h2>
-              <p className="text-[10px] sm:text-xs" style={{ color: theme.accentColor }}>
+              <p className="text-[10px] sm:text-xs truncate" style={{ color: theme.accentColor }}>
                 {userRole === 'hasan' 
-                  ? 'اختیارات لوکال، ثبت اقدامات مراقبتی، چت با جمینای و تنظیمات سیستم'
+                  ? 'اختیارات لوکال، ثبت اقدامات مراقبتی و چت با جمینای'
                   : 'راهنمای پزشکی، دارویی، تغذیه فازمحور و همراهی هوشمند حسن'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <ThemeSelector compact />
+
+            {/* Fullscreen Toggle Button (Browser Immersive Fullscreen) */}
+            <button
+              onClick={toggleNativeFullscreen}
+              className="p-1.5 sm:p-2 rounded-xl text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+              title={isFullscreen ? 'خروج از حالت تمام‌صفحه بازی' : 'تمام‌صفحه و مخفی کردن نوار مرورگر'}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4 text-rose-400" /> : <Maximize2 className="w-4 h-4 text-emerald-400" />}
+              <span className="hidden sm:inline text-[11px]">{isFullscreen ? 'خروج' : 'تمام‌صفحه'}</span>
+            </button>
+
+            {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-2 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800/80 transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-full text-neutral-400 hover:text-white hover:bg-rose-500/20 hover:text-rose-400 transition-colors cursor-pointer"
               title="بستن"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center justify-between gap-1 mt-3 p-1 rounded-2xl bg-black/40 border border-white/10 overflow-x-auto text-xs scrollbar-none">
-          <button
-            onClick={() => setActiveTab('status')}
-            style={activeTab === 'status' ? { backgroundColor: theme.primaryColor } : {}}
-            className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'status'
-                ? 'text-white shadow-md'
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>وضعیت امروز</span>
-          </button>
+        {/* Inner Scrollable Body with safe padding */}
+        <div className="p-3.5 sm:p-6 space-y-4 flex-1 overflow-y-auto pb-16 sm:pb-8">
+          {/* Tab Navigation */}
+          <div className="sticky top-0 z-20 flex items-center justify-between gap-1 p-1.5 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 overflow-x-auto text-xs scrollbar-none shadow-lg">
+            <button
+              onClick={() => setActiveTab('status')}
+              style={activeTab === 'status' ? { backgroundColor: theme.primaryColor } : {}}
+              className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'status'
+                  ? 'text-white shadow-md'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>وضعیت امروز</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('hasan_hub')}
-            className={`py-2 px-2.5 rounded-xl font-bold transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'hasan_hub'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'text-amber-400 hover:text-white bg-amber-950/30 border border-amber-800/40'
-            }`}
-          >
-            <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
-            <span>پانل حسن 👑</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('hasan_hub')}
+              className={`py-2 px-2.5 rounded-xl font-bold transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'hasan_hub'
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'text-amber-400 hover:text-white bg-amber-950/30 border border-amber-800/40'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
+              <span>پانل حسن 👑</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('chat')}
-            style={
-              activeTab === 'chat'
-                ? { backgroundColor: theme.primaryColor }
-                : { backgroundColor: theme.pillBg, color: theme.accentColor }
-            }
-            className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'chat'
-                ? 'text-white shadow-md'
-                : 'hover:text-white'
-            }`}
-          >
-            <Bot className="w-3.5 h-3.5" />
-            <span>دستیار جمینای</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              style={
+                activeTab === 'chat'
+                  ? { backgroundColor: theme.primaryColor }
+                  : { backgroundColor: theme.pillBg, color: theme.accentColor }
+              }
+              className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'chat'
+                  ? 'text-white shadow-md'
+                  : 'hover:text-white'
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>دستیار جمینای</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('analgesic')}
-            style={activeTab === 'analgesic' ? { backgroundColor: theme.primaryColor } : {}}
-            className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'analgesic'
-                ? 'text-white shadow-md'
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Pill className="w-3.5 h-3.5" />
-            <span>دارو و مسکن 💊</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('analgesic')}
+              style={activeTab === 'analgesic' ? { backgroundColor: theme.primaryColor } : {}}
+              className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'analgesic'
+                  ? 'text-white shadow-md'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Pill className="w-3.5 h-3.5" />
+              <span>دارو و مسکن 💊</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('calendar')}
-            style={activeTab === 'calendar' ? { backgroundColor: theme.primaryColor } : {}}
-            className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'calendar'
-                ? 'text-white shadow-md'
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <CalendarIcon className="w-3.5 h-3.5" />
-            <span>تقویم و ۴ فاز</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('calendar')}
+              style={activeTab === 'calendar' ? { backgroundColor: theme.primaryColor } : {}}
+              className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'calendar'
+                  ? 'text-white shadow-md'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              <span>تقویم و ۴ فاز</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('nutrition')}
-            style={activeTab === 'nutrition' ? { backgroundColor: theme.primaryColor } : {}}
-            className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'nutrition'
-                ? 'text-white shadow-md'
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Apple className="w-3.5 h-3.5" />
-            <span>تغذیه</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('nutrition')}
+              style={activeTab === 'nutrition' ? { backgroundColor: theme.primaryColor } : {}}
+              className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'nutrition'
+                  ? 'text-white shadow-md'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Apple className="w-3.5 h-3.5" />
+              <span>تغذیه</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('coupons')}
-            style={activeTab === 'coupons' ? { backgroundColor: theme.primaryColor } : {}}
-            className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'coupons'
-                ? 'text-white shadow-md'
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Heart className="w-3.5 h-3.5" />
-            <span>کوپن‌ها</span>
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveTab('coupons')}
+              style={activeTab === 'coupons' ? { backgroundColor: theme.primaryColor } : {}}
+              className={`py-2 px-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                activeTab === 'coupons'
+                  ? 'text-white shadow-md'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Heart className="w-3.5 h-3.5" />
+              <span>کوپن‌ها</span>
+            </button>
+          </div>
 
         {/* Tab Content */}
         <div className="mt-4 space-y-4">
@@ -1337,6 +1397,7 @@ export const PeriodCareModal: React.FC<PeriodCareModalProps> = ({ isOpen, onClos
               )}
             </motion.div>
           )}
+        </div>
         </div>
 
         {/* Interactive Shamsi Date Picker Modal */}

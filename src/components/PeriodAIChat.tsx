@@ -248,7 +248,7 @@ export const PeriodAIChat: React.FC<PeriodAIChatProps> = ({ cycleStatus, initial
         backgroundColor: theme.cardBg,
         borderColor: theme.cardBorder,
       }}
-      className="flex flex-col h-[560px] max-h-[75vh] rounded-2xl border overflow-hidden shadow-2xl"
+      className="flex flex-col h-[68vh] sm:h-[580px] min-h-[460px] max-h-[82vh] rounded-2xl border overflow-hidden shadow-2xl"
     >
       {/* Chat Sub-Header */}
       <div className="px-3.5 py-3 bg-white/5 border-b border-white/10 backdrop-blur-md flex flex-col gap-2.5">

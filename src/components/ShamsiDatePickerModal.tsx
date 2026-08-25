@@ -105,7 +105,7 @@ export const ShamsiDatePickerModal: React.FC<ShamsiDatePickerModalProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 font-vazir"
+      className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 font-vazir"
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
